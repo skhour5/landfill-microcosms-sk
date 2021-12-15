@@ -1,0 +1,123 @@
+---
+title: "Project proposal"
+author: "Judy Malas"
+output: html_document
+date: November 17th 2021
+---
+
+```{r load-packages, message = FALSE}
+library(tidyverse)
+library(broom)
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("phyloseq")
+library(phyloseq)
+```
+
+#### 1. Data
+
+#### **General data comment 5/6 points:** Great work, Judy! You've distilled a lot of information and presented your pre-processing clearly. You also provided a nice data dictionary in the .README. I left a few comments and changes to improve readability of your code. I only dropped 1 point for using your local file path instead of the `../data/...` filepath. 
+
+The dataset that will be used comes from an experiment conducted to test the effects of chemical additives on the microbial populations within landfills. 
+
+The study used simulated landfill microcosms and tracked microbial populations over a 65 day period. Fifteen microcosms were set up identically on day 0, and DNA was sampled from all 15 microcosms on days 6 (T1), 20 (T2), 29 (T3), and 40 (T4). On day 40, three microcosms were destructively sampled for chemical measurements including sulfide, sulfate, total iron, and ferrous iron. 
+On day 44, triplicate microcosms were "spiked" with different additives (sodium sulfate, antibiotics, and Fe(OH)3). Two additional DNA samples were taken at 50 (T5) days and 65 (T6) days of incubation from the remaining 12 microcosms. At the end of the 65 day period, all microcosms were destructively sampled for chemical concentrations of sulfide, sulfate, total iron, and ferrous iron. 
+
+After sampling, DNA was extracted and a portion of the 16S rRNA gene was amplified and sequenced. The initial phase of data processing for 16s data involves quality control, demultiplexing, and binning sequences into amplicon sequence variants (ASVs -- also known as OTUs or operational taxonomic units). 
+The ASVs are then matched to a reference library to identify their taxonomy. 
+
+This markdown picks up after this initial phase of data processing. In the following chunk, we have a "Phyloseq object" which was made in the phyloseq package in R. The object consists of an OTU table (ASVs abundance matched to samples); a metadata file (`sample_data`) which includes the time the sample was taken, spike added to the sample, etc.; a taxa_table which identifies which ASV is matched to which taxonomy by 6 taxonomic ranks (i.e. Kingdom, Phylum, Class, Order, Family, Genus); and an optional phylogentic tree.
+
+#### Comment 1: You can use two backticks to format a string as an object e.g., (`sample_data`)
+
+```{r read_phyloseq_object}
+full_16s_dataset <- readRDS("../data/all")
+glimpse(full_16s_dataset)
+```
+
+#### Comment 2: I updated the file path to point to the `/data` folder
+
+#### Comment 3: I updated the assign operators to `<-`. This is minor, but good practice.
+
+In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
+
+```{r define-calc-prop}
+calc_prop <- function(x){
+  x / sum(x)
+}
+
+full_16s_dataset_relative <- transform_sample_counts(full_16s_dataset, calc_prop)
+```
+
+We can then use the function `psmelt` which will combine all the elements of the object, except the phylogentic tree, into a single data frame.
+
+```{r create-dataframe-with-psmelt}
+full_16s_df <- psmelt(full_16s_dataset_relative)  
+glimpse(full_16s_df)
+```
+
+#### Comment 4: I added some spaces for improved clarity and separated your two tasks into separate chunks.
+
+The data contain `r nrow(full_16s_df)` rows and `r ncol(full_16s_df)` columns. The data are relatively tidy because each row representations one observation of an OTU's relative abundance in each DNA sample. 
+However, the column names are not very tidy; some are capitalized and some are not and there are random punctuation marks in some column names. Additionally, one column is completely blank and should be deleted. 
+
+#### 2. Exploratory Visualization
+
+```{r histogram-rel-abundance}
+ggplot(full_16s_df, aes(Abundance))+
+  geom_histogram()+
+  labs(x = "Relative Abundance")
+```
+From the plot above we can see that most of the samples have OTUs with very low relative abundances <002. Perhaps from this plot we can get an understanding of how much of the data gets cut off when we filter for different abundances.
+
+#### Comment 5: What are the units for the abundances here? is this value 0.02?
+
+Differences at the class level at the end of the experiment? 
+```{r trial-vis}
+
+full_16s_df %>% 
+  filter(sample_time == "T6", Phylum == "Firmicutes", Abundance > 0.0001) %>% 
+    ggplot(aes(x = spike, y = Abundance, fill = Class))+
+    geom_bar(stat = "identity")+ 
+  labs(y = "Relative Abundance")
+  
+```
+Overall, the relative abundance of the different classes remain fairly similar across the experiments. 
+However, the Fe(OH)3 spike seems to have some additional classes not seen in the other experiments (*Moorellia*, *Negativicutes*, and *Thermacetogenia*), at least at this filtering level. The y axis here goes until 3 because there are three bottles in each spike.
+
+#### Comment 5: You can add *italics* using a single asterix around each word (I think these names can be italicized?)
+
+#### Comment 6: Are you sure you want to use the summed relative abundance? Perhaps you could look at the average of the triplicate bottles (I don't know the conventions in this field.)
+
+```{r group-by}
+genus_desending = full_16s_df %>% 
+  group_by(Genus) %>% 
+  count() %>% 
+  arrange(desc(n))
+genus_desending
+```
+
+
+```{r plot-genus-counts}
+  ggplot(genus_desending, aes(n)) +
+  geom_histogram()
+```
+There are 127 identified Genuses, are most of them are observed <10000 times, with one outlier (*Caproiciproducens*). That being said, the vast majority of Genuses are NA. 
+
+#### Comment 7: Nice visualizations. Remember you can improve visuals with a theme, or labels for title, subtitle, and each axis. 
+
+#### Comment 8: I separated your steps again into separate chunks. It's also nice to leave a short text narrative above your code chunk explaining what you're doing.
+
+#### 3. Possible question and method
+The obvious question, and the reason the experiment was conducted is:  
+
+**How do the different additives tested affect the microbial community in a landfill?**
+
+Using the tools we learned in class, it would make sense to dig into each of the different taxonomic groups at some level and search for visual differences from the plots. For example, I could use `group_by()` and `summarize()` to make averages for triplicates across different taxonomic levels by filtering for different Taxa.
+
+#### Comment 9: This sounds good. After completing the last two units you may also be able to fit a model using spiking treatment as a categorical variable, and interpreting the p-values or confidence interval overlap for statistical significance. You can also be a bit more specific. You could break your question down into different questions for each spiking treatment, and provide a little background on how you think these spikes could affect microbial communities. For example, how might microbes use Fe2+ vs. Fe3+?
+
+#### Comment 10: I also put your question in bold - just to gently encourage you to explore some RMarkdown formatting as well as your content. :) 
+
+#### **General Proposal Comments 18/20 (Data 5/6; Proposal 10/10; Workflow, org, code quality: 3/4)**: Excellent work! I deducted one point for not distinguishing your code tasks into well-described chunks, and one point for the data filepath.
+  

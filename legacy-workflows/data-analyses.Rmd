@@ -1,0 +1,366 @@
+---
+title: "data-analyses"
+author: "Judy Malas"
+date: "12/7/2021"
+output: html_document
+---
+
+```{r load-packages, message = FALSE}
+library(tidyverse)
+library(broom)
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# BiocManager::install("phyloseq")
+library(phyloseq)
+library(forcats)
+library(tidymodels)
+library(RColorBrewer)
+```
+
+#### 1. Data
+
+In the following chunk, we have a "Phyloseq object" which was made in the phyloseq package in R. The object consists of an OTU table (ASVs abundance matched to samples); a metadata file (`sample_data`) which includes the time the sample was taken, spike added to the sample, etc.; a taxa_table which identifies which ASV is matched to which taxonomy by 6 taxonomic ranks (i.e. Kingdom, Phylum, Class, Order, Family, Genus); and an optional phylogentic tree.
+
+```{r read_phyloseq_object}
+full_16s_dataset <- readRDS("../data/all")
+```
+
+In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
+```{r define-calc-prop}
+
+calc_prop <- function(x){x / sum(x)}
+
+full_16s_dataset_relative <- transform_sample_counts(full_16s_dataset, calc_prop)
+```
+
+We can then use the function `psmelt` which will combine all the elements of the object, except the phylogentic tree, into a single data frame.
+Here I made two dataframes: one for the full dataset with absolute counts, and one for the full dataset with relative counts. 
+```{r create-dataframe-with-psmelt}
+
+full_16s_df_rel <- psmelt(full_16s_dataset_relative)  
+glimpse(full_16s_df_rel)
+
+full_16s_df_abs <- psmelt(full_16s_dataset)
+
+```
+
+```{r save_df}
+
+saveRDS(full_16s_df_rel, file = "../data/full_16s_df_rel")
+saveRDS(full_16s_df_abs, file = "../data/full_16s_df_abs")
+
+```
+
+
+#### Tidying data 
+```{r relevel-spikes}
+as.factor(full_16s_df_rel$spike)
+
+full_16s_df_rel <- full_16s_df_rel %>% 
+  mutate(spike = fct_relevel(spike, "Control ", "Antibiotics", "Fe(OH)3", "Na2SO4"))
+
+```
+
+#### Exploratory Visualization
+```{r histograms-of-abundance}
+ggplot(full_16s_df_rel, aes(Abundance)) +
+  geom_histogram() +
+  labs(x = "Relative Abundance")
+
+
+ggplot(full_16s_df_abs, aes(Abundance)) +
+  geom_histogram() +
+  labs(x = "Absolute Abundance")
+```
+From the plot above we can see that most of the samples have OTUs with very low relative abundances <002. Perhaps from this plot we can get an understanding of how much of the data gets cut off when we filter for different abundances.
+
+The following chunk arranges the full dataset in descending order by Genus counts. 
+```{r group-by-Genus-desc, echo = FALSE}
+genus_desending <- full_16s_df_abs %>% 
+   group_by(Genus) %>% 
+   count() %>% 
+   arrange(desc(n)) 
+
+genus_desending
+
+```
+*Caproiciproducens, Incertae_Sedis*, and *Oxobacter* are the 3 most abundant genera. 
+
+
+```{r group-by-phyla-desc}
+
+ full_16s_df_abs %>% 
+   group_by(Phylum) %>% 
+   count() %>% 
+   arrange(desc(n)) 
+
+```
+
+
+```{r plot-genus-counts}
+  ggplot(genus_desending, aes(n)) +
+  geom_histogram() + 
+  theme_classic()
+  
+```
+There are 127 identified Genuses, are most of them are observed <10000 times, with one outlier (*Caproiciproducens*). That being said, the vast majority of Genuses are NA. 
+
+```{r heatmap-by-spike}
+
+full_16s_df_rel %>% 
+  filter(sample_time == "T6") %>% 
+  group_by(spike, Phylum) %>% 
+  summarize(avg_triplicate_abundance = mean(Abundance)) %>%  
+  ggplot(aes(x = spike, y = Phylum, fill = avg_triplicate_abundance))+
+    geom_tile()
+
+```
+
+```{r boxplots-all-data}
+
+full_16s_df_rel %>% filter(sample_time == c("T1","T6"), Abundance > 0) %>% 
+  ggplot(aes(x= Phylum, y = Abundance, fill = Phylum)) +
+  geom_boxplot() +
+  scale_y_log10()+
+  facet_grid(spike~ sample_time) +
+  theme_bw() +
+  labs(y = "Relative Abundance", x = " ")+
+  theme(axis.text.x=element_text(angle = -90, hjust = 0)) 
+  
+
+```
+
+```{r heatmaps-again}
+
+full_16s_df_rel %>% filter(sample_time == c("T1","T6")) %>% 
+   ggplot(aes(x = spike, y = Family, fill = Abundance))+
+    geom_tile()
+
+  
+
+```
+NOPE. NO HEATMAPS.
+
+
+**How do the different additives tested affect the microbial community in a landfill?**
+
+Using the tools we learned in class, it would make sense to dig into each of the different taxonomic groups at some level and search for visual differences from the plots. 
+
+For example, I could use `group_by()` and `summarize()` to make averages for triplicates across different taxonomic levels by filtering for different Taxa.
+
+
+```{r top-10-genera-points}
+full_16s_df_rel %>% 
+  filter(Genus == c("Caproiciproducens", "Incertae_Sedis", "Oxobacter", "Clostridium_sensu_stricto_12", "Halomonas", "Tumebacillus", "Aeribacillus", "Clostridium_sensu_stricto_7", "Brevibacillus", "Thermoanaerobacterium")) %>%
+  ggplot(aes(x = spike, y = Abundance, fill = Genus, color = Genus)) + 
+  geom_point()
+
+full_16s_df_rel %>% 
+  filter(Genus == c("Caproiciproducens", "Incertae_Sedis", "Oxobacter", "Clostridium_sensu_stricto_12", "Halomonas", "Tumebacillus", "Aeribacillus", "Clostridium_sensu_stricto_7", "Brevibacillus", "Thermoanaerobacterium")) %>%
+  ggplot(aes(x = sample_time, y = Abundance, fill = Genus, color = Genus)) + 
+  geom_point()
+
+```
+
+```{r tumebacillus}
+
+full_16s_df_rel %>% 
+  filter(Genus == "Tumebacillus") %>%
+  ggplot(aes(x = spike, y = Abundance, fill = Genus, color = Genus)) + 
+  geom_point()
+
+```
+
+```{r top-10-bar}
+full_16s_df_rel %>% 
+  filter(Genus == c("Caproiciproducens", "Incertae_Sedis", "Oxobacter", "Clostridium_sensu_stricto_12", "Halomonas", "Tumebacillus", "Aeribacillus", "Clostridium_sensu_stricto_7", "Brevibacillus", "Thermoanaerobacterium")) %>%
+  ggplot(aes(x = spike, y = Abundance, fill = Genus, color = Genus)) + 
+  geom_bar(stat="identity")
+
+full_16s_df_rel %>% 
+  filter(Genus == c("Caproiciproducens", "Incertae_Sedis", "Oxobacter", "Clostridium_sensu_stricto_12", "Halomonas", "Tumebacillus", "Aeribacillus", "Clostridium_sensu_stricto_7", "Brevibacillus", "Thermoanaerobacterium")) %>%
+  ggplot(aes(x = sample_time, y = Abundance, fill = Genus, color = Genus)) + 
+  geom_bar(stat = "Identity") +
+  facet_wrap(~spike)
+
+```
+```{r top-10-boxplot}
+
+full_16s_df_rel %>% 
+  filter(Genus == c("Caproiciproducens", "Incertae_Sedis", "Oxobacter", "Clostridium_sensu_stricto_12", "Halomonas", "Tumebacillus", "Aeribacillus", "Clostridium_sensu_stricto_7", "Brevibacillus", "Thermoanaerobacterium")) %>%
+  ggplot(aes(x= Genus, y = Abundance, fill = Genus)) +
+  geom_boxplot() +
+  scale_y_log10()+
+  facet_grid(spike~ sample_time) +
+  theme_bw() +
+  labs(y = "Relative Abundance", x = " ")+
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))+
+  scale_color_viridis_d()
+
+
+```
+
+**After completing the last two units you may also be able to fit a model using spiking treatment as a categorical variable, and interpreting the p-values or confidence interval overlap for statistical significance. **
+
+```{r linear-reg-top-10-genera}
+top_10_genera_rel = full_16s_df_rel %>% 
+  filter(Genus == c("Caproiciproducens", "Incertae_Sedis", "Oxobacter", "Clostridium_sensu_stricto_12", "Halomonas", "Tumebacillus", "Aeribacillus", "Clostridium_sensu_stricto_7", "Brevibacillus", "Thermoanaerobacterium")) 
+
+linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = top_10_genera_rel) %>% 
+  tidy()
+```
+
+```{r linear-reg-Tume}
+
+Tumebacillus = full_16s_df_rel %>% 
+  filter(Genus == "Tumebacillus")
+
+fit_tume =  linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Tumebacillus) 
+
+
+linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Tumebacillus) %>% 
+  tidy()
+
+glance(fit_tume)$r.squared
+
+```
+
+```{r boxplots-for-tume}
+
+full_16s_df_rel %>% 
+  filter(Genus == "Tumebacillus") %>% 
+  ggplot(aes(x = spike, y = Abundance)) +
+  geom_boxplot() +
+  facet_wrap(~sample_time)
+
+
+```
+
+
+```{r just-t4-t5}
+
+Tumebacillus_t4_t5 = full_16s_df_rel %>% 
+  filter(Genus == "Tumebacillus", sample_time == c("T4", "T5"))
+
+fit_tume_2 =  linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Tumebacillus_t4_t5) 
+
+
+linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Tumebacillus_t4_t5)  %>% 
+  tidy()
+
+glance(fit_tume_2)$r.squared
+
+```
+
+
+
+```{r just-after_spike}
+
+Tumebacillus_after_spike = full_16s_df_rel %>% 
+  filter(Genus == "Tumebacillus", sample_time == c("T5", "T6"))
+
+fit_tume_3 =  linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Tumebacillus_after_spike) 
+
+
+linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Tumebacillus_after_spike)  %>% 
+  tidy()
+
+glance(fit_tume_3)$r.squared
+
+```
+
+
+
+```{r linear-reg-Cap}
+
+
+Caproiciproducens = full_16s_df_rel %>% 
+  filter(Genus == "Caproiciproducens")
+
+fit_caproic =  linear_reg() %>% 
+  set_engine("lm") %>% 
+  fit(Abundance~ spike, data = Caproiciproducens) 
+
+
+glance(fit_caproic)$r.squared
+
+```
+
+
+
+
+**You can also be a bit more specific. You could break your question down into different questions for each spiking treatment, and provide a little background on how you think these spikes could affect microbial communities. For example, how might microbes use Fe2+ vs. Fe3+?**
+
+```{r control-v-iron-spike}
+
+iron_v_control <- full_16s_df_rel %>% 
+  filter(spike == c("Control ", "Fe(OH)3"))
+
+
+
+
+
+```
+
+
+
+```{r look-at-triplicate-controls}
+
+ cols = brewer.pal(9, "Spectral")
+
+full_16s_df_rel %>% 
+  select(spike, Abundance, Phylum, Family, Genus, sample_time, bottle) %>%
+  filter(spike == "Control ") %>% 
+  mutate(Genus = case_when(Abundance < 0.02 ~ "Other < 2%",
+                           is.na(Genus) ~ "Unclassified",
+                               TRUE ~ Genus)) %>% 
+  mutate(Genus = fct_relevel(Genus, "Anoxybacillus", "Caproiciproducens", "Cupriavidus", "Oxobacter", "Sporolactobacillus", "Turicella", "Vulcaniibacterium", "Unclassified", "Other < 2%")) %>% 
+  ggplot(aes(x = bottle, y = Abundance, fill= Genus, color = Genus)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~sample_time, ncol = 3)+
+  scale_color_manual(values= cols) +
+  scale_fill_manual(values= cols) +
+  theme_bw()+
+  labs(y = "Relative Abundance", x = " ")
+
+
+
+```
+
+
+```{r look-at-triplicate-antibiotics-v-control}
+
+ cols_1 = brewer.pal(9, "Spectral")
+
+full_16s_df_rel %>% 
+  select(spike, Abundance, Phylum, Family, Genus, sample_time, bottle, bottle_number) %>%
+  filter(spike == c("Antibiotics", "Control "), sample_time == c("T1", "T6")) %>% 
+  mutate(Genus = case_when(Abundance < 0.01 ~ "Other < 2%",
+                           is.na(Genus) ~ "Unclassified",
+                               TRUE ~ Genus)) %>% 
+  ggplot(aes(x = bottle_number, y = Abundance, fill= Genus, color = Genus)) +
+  geom_bar(stat = "identity") +
+  theme_bw()+
+  labs(y = "Relative Abundance", x = " ")+
+  facet_grid(sample_time~spike)
+
+
+
+```
+
+    
+

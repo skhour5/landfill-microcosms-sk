@@ -1,6 +1,6 @@
 ---
 title: "Landfill in a Bottle: Studying Microbial Dynamics Using Lab-Built Microcosms"
-subtitle: "Amplicon data visualization and statistics"
+subtitle: "Amplicon data visualization and linear models"
 author: "Judy-Malas"
 date: "12/15/2021"
 output: 

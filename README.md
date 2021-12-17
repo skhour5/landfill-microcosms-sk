@@ -15,7 +15,8 @@ Further reading:
 
 http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html
 
-Links to other methods to detect differentially abundant taxa:
 Random Forest in R example: https://rpubs.com/michberr/randomforestmicrobe
+
 LEfSe: https://bitbucket.org/biobakery/biobakery/wiki/lefse
+
 ANCOM: https://www.ncbi.nlm.nih.gov/pubmed/26028277

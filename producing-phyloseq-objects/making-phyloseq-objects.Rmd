@@ -7,9 +7,17 @@ output:
     theme: readable
 ---
 
+Tips before starting:
 
-```{r, message=FALSE}
-#install bioconductor if needed
+* Make sure you have the lastest version of R, this Markdown was made on R version 4.1.1 
+* Some of these steps take a while, make sure you change your computer settings so that it doesn't automatically sleep during one of the steps
+ + That said, if your comp doesn't have a whole lot of memory, don't multitask while running the code chunks so your comp doesn't crash
+* Save individual files made between steps using the `saveRDS` function to your data folder
+* Sometimes if you're getting werid error messages for a while, it's best to restart R, or better yet, restart R and go do something else for a while
+
+
+Uncomment and run this chunk only if you don't have the packages needed in the next code chunk 
+```{r install_packages, eval = FALSE }
 
 #if (!requireNamespace("BiocManager", quietly = TRUE))
  #install.packages("BiocManager")
@@ -21,13 +29,27 @@ output:
 
 #BiocManager::install("dada2", force = TRUE)
 
+#if (!requireNamespace("BiocManager", quietly=TRUE))
+ #   install.packages("BiocManager")
+# BiocManager::install("DECIPHER")
+
+
+#BiocManager::install("DESeq2")
+
+#BiocManager::install("microbiome")
+
+
+
+```
+
+
+```{r, message=FALSE}
+
 library(dada2); packageVersion("dada2")
-
-
 library(ggplot2)
 library(gridExtra)
 library(phyloseq)
-
+library(DECIPHER); package.version("DECIPHER")
 require("tidyverse")
 library("dplyr")
 library("rmarkdown")
@@ -35,25 +57,20 @@ library("vegan")
 library("PoiClaClu")
 library("doParallel")
 library("plotly")
-#BiocManager::install("microbiome")
 library("microbiome"); packageVersion("microbiome")
-#BiocManager::install("DESeq2")
 library("DESeq2")
 library("ggpubr")
-#library("data.table")
 library("viridis")
-#library(DECIPHER); package.version("DECIPHER")
 library("plyr"); packageVersion("plyr")
 library("magrittr")
 library("scales")
+#library("data.table")
 #library(grid)
 #library(reshape2)
 #library(randomForest)
 
 ```
 
-
-> based mainly on https://benjjneb.github.io/dada2/tutorial.html
 
 ## STEPS 
 * Step 1: Getting the files ready
@@ -79,7 +96,8 @@ Important files made in part one:
   `killed`  = phyloseq object w/o variance transformation, killed samples full time of experiment (no NL1-3)
   
   `vst_all` = phyloseq object WITH variance transformation, all samples full time of experiment (no NL1-3)
-  
+
+> based mainly on https://benjjneb.github.io/dada2/tutorial.html 
   
 ----
 
@@ -89,9 +107,9 @@ Live samples: Create a path to the files being used
 
 all_live_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live")
 
-#path to a new file where I'll put the filtered 
 
-all_filt_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live_filt")
+
+
 
 ```
 
@@ -99,10 +117,6 @@ all_filt_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/al
 ```{r read-in-file-names}
 
 fns_all <- sort(list.files(all_live_path, full.names = TRUE)) #sort ensures forward/reverse reads are in the same order
-
-# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
-sample.names <- basename(fns_all)
-
 
 ```
 
@@ -121,7 +135,7 @@ dada2::plotQualityProfile("~/landfill-microcosms/data/PEAR-merged-fastq-files/al
 
 
 
-```{r,  qualitycheck-merged-reads, eval=FALSE}
+```{r  qualitycheck-merged-reads, eval=FALSE}
 
 alli <- sample(length(fns_all), 83) #the number should be the number of files in the directory with fastq files
 
@@ -171,8 +185,15 @@ for(i in seq_along(fns_all)) {filterAndTrim(fns_all, filt_all,
 ```
 
 #### STEP 2.2: QUALITY CHECK AFTER FILTERING
-Live Samples: Check trimmed quality 
-```{r, eval=FALSE}
+
+
+```{r check-one-trimmmed-quality}
+print(plotQualityProfile("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live_filt/AB1_t2_PEAR.assembled.fastq"))
+
+```
+
+
+```{r check-trimmed-quality, eval=FALSE}
 
 all_filt <- sample(length(filt_all), 83) 
 for(i in all_filt) { print(plotQualityProfile(filt_all[i]) + ggtitle("All live filt"))}
@@ -185,33 +206,51 @@ Live Samples: Dereplication
 ```{r, eval=FALSE}
 
 derep_all = derepFastq(filt_all)
-sam.names_all <- sapply(strsplit(basename(filt_all), "_"), `[`, 1)
-names(derep_all) <- sam.names_all
+
+sample.names <- basename(fns_all)
+
+names(derep_all) <- sample.names
+#sam.names_all <- sapply(strsplit(basename(filt_all), "_"), `[`, 1)
+
+#names(derep_all) <- sam.names_all
 
 ```
+> Here we use the high-resolution DADA2 method to infer ribosomal seq variats exactly, without imposing any arbitatry thershold (as is typical with OTUs) (Callahan et al., 2016)
+
 
 ### STEP 4: ERROR RATES
 For learning errors, used code here because the one in the Callahan et al. paper didn't work, but this is by the same author:
-https://benjjneb.github.io/dada2/tutorial_1_8.html
-might need to change the "nbases" parameter to see if the fit improves
-Live samples: Learning Errors 
-```{r, eval=FALSE}
+```{r learn-errors, eval=FALSE}
 
-error_all = learnErrors(derep_all, multithread = TRUE)
 
-plotErrors(error_all, nominalQ=TRUE) #it looks like this is an okay fit, but I'll try increasing the number of bases
+error_all = learnErrors(derep_all, multithread = TRUE) # by default the learnErrors function uses only a subset of the data (the first 100 M bases); can increase if desired. 
 
-err_all = learnErrors(derep_all, multithread = TRUE, nbases = 1e9) #this used all of the samples, we'll see how long it takes
-plotErrors(err_all, nominalQ=TRUE)
+#err_all = learnErrors(derep_all, multithread = TRUE, nbases = 1e9) 
+
+saveRDS(error_all, "../data/error_all")
+
 
 
 ```
 
-### STEP 5: CONSTRUCT ASVS WITH DADA2 
-Live samples: DADA2 sequence inference method
-```{r, eval=FALSE}
+> The DADA2 algorithm makes use of a parametric error model (err) and every amplicon dataset has a different set of error rates. The learnErrors method learns this error model from the data, by alternating estimation of the error rates and inference of sample composition until they converge on a jointly consistent solution. As in many machine-learning problems, the algorithm must begin with an initial guess, for which the maximum possible error rates in this data are used (the error rates if only the most abundant sequence is correct and all the rest are errors).https://benjjneb.github.io/dada2/tutorial_1_8.html
 
-dada_all = dada(derep_all, err=err_all, pool=TRUE, multithread= TRUE)
+
+```{r plot-errors}
+
+error_all <- readRDS("../data/error_all")
+
+plotErrors(error_all, nominalQ=TRUE) 
+
+```
+
+
+### STEP 5: CONSTRUCT ASVS WITH DADA2 
+
+```{r dereplication-live, eval=FALSE}
+
+dada_all = dada(derep_all, err=error_all, pool=TRUE, multithread= TRUE)
+
 ```
 
 ### STEP 6: SEQ TABLE + REMOVE CHIMERAS
@@ -226,17 +265,44 @@ nochim_seqtab.all <- removeBimeraDenovo(seqtab, method="consensus", multithread=
 
 ### STEP 7: CLASSIFY TAXONOMY
 Live samples: Classify Taxonomy
-```{r, eval=FALSE}
+The training datasets are too large to upload to github, so it's best to keep the files on your computer 
+I used the `DECIPHER` package in the next step to assign the taxonomy, it is faster
+```{r classify taxonomy, eval=FALSE}
 
-ref_fasta = "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz"
-print(ref_fasta)
+#ref_fasta = "~/Desktop/Landfill_Project/16s_data/silva_nr_v138_train_set.fa.gz"
+#print(ref_fasta)
 
-taxtab.all = assignTaxonomy(nochim_seqtab.all, refFasta = ref_fasta)
-colnames(taxtab.all) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+#taxtab.all = assignTaxonomy(nochim_seqtab.all, refFasta = ref_fasta)
+#colnames(taxtab.all) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
 
 ```
 
 #### STEP 7.1: ASSIGN TAXONOMY ANOTHER WAY. 
+
+This training dataset was small enough to store on github
+```{r}
+
+dna <- DNAStringSet(getSequences(nochim_seqtab.all)) # Create a DNAStringSet from the ASVs
+
+load("~/data/taxonomy/SILVA_SSU_r138_2019.RData") # CHANGE TO THE PATH OF YOUR TRAINING SET
+
+ids <- IdTaxa(dna, trainingSet, strand="top", processors=NULL, verbose=FALSE) # use all processors
+
+ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
+
+# Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+taxid <- t(sapply(ids, function(x) {
+        m <- match(ranks, x$rank)
+        taxa <- x$taxon[m]
+        taxa[startsWith(taxa, "unclassified_")] <- NA
+        taxa
+}))
+colnames(taxid) <- ranks; rownames(taxid) <- getSequences(seqtab.nochim)
+
+
+```
+
+
 ```{r, eval=FALSE}
 
 taxa <- assignTaxonomy(nochim_seqtab.all, "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz", multithread=TRUE)

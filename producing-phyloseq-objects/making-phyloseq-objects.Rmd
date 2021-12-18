@@ -1,5 +1,5 @@
 ---
-title: "making-phyloseq-objects"
+title: "making-phyloseq-objects-using-dada2"
 author: "Judy-Malas"
 date: "12/17/2021"
 output: 
@@ -14,6 +14,11 @@ Tips before starting:
  + That said, if your comp doesn't have a whole lot of memory, don't multitask while running the code chunks so your comp doesn't crash
 * Save individual files made between steps using the `saveRDS` function to your data folder
 * Sometimes if you're getting werid error messages for a while, it's best to restart R, or better yet, restart R and go do something else for a while
+* Most packages have websites or repositories on github, if you're really stuck, that would be a good place to look. some examples:
+ + https://github.com/joey711/phyloseq/issues
+ + https://github.com/benjjneb/dada2/issues
+ + http://www2.decipher.codes/Classification.html
+
 
 
 Uncomment and run this chunk only if you don't have the packages needed in the next code chunk 
@@ -39,17 +44,20 @@ Uncomment and run this chunk only if you don't have the packages needed in the n
 #BiocManager::install("microbiome")
 
 
+#install.packages("phangorn")
 
 ```
 
+It doesn't matter if the package names have quotes or not
+```{r load-packages, message=FALSE}
 
-```{r, message=FALSE}
 
 library(dada2); packageVersion("dada2")
 library(ggplot2)
 library(gridExtra)
 library(phyloseq)
 library(DECIPHER); package.version("DECIPHER")
+library(phangorn)
 require("tidyverse")
 library("dplyr")
 library("rmarkdown")
@@ -79,15 +87,15 @@ library("scales")
   + Step 2.2: Checking quality after filtering 
 * Step 3: Dereplication step
 * Step 4: Error rates
-* STEP 5: CONSTRUCT ASVS WITH DADA2 
+* STEP 5: Construct ASVS with `DADA2` 
 * Step 6: Make a sequence table and remove chimeras
 * Step 7: Assign taxonomy, using the chimera-free reads
-  + Step 7.1: Assign taxonomy another way, fits with the variance stabilizing transformation in step 10 
-* Step 8: Make a tree
+  + Step 7.1: Assign taxonomy another way with `DECIPHER` , fits with the variance stabilizing transformation in step 10 
+* Step 8: Make a tree with `phangorn`
 * Step 9:  Read in in your metadata table
 * Step 10: Variance stabilizing transformation; ignore if not transforming data
 * Step 11: Make a phyloseq object on transformed data
-  * Step 11.1: Make a phyloseq object w/o transformed data
+  + Step 11.1: Make a phyloseq object w/o transformed data
   
 Important files made in part one:
 
@@ -106,10 +114,6 @@ Live samples: Create a path to the files being used
 ```{r fastq-file-path}
 
 all_live_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live")
-
-
-
-
 
 ```
 
@@ -186,7 +190,6 @@ for(i in seq_along(fns_all)) {filterAndTrim(fns_all, filt_all,
 
 #### STEP 2.2: QUALITY CHECK AFTER FILTERING
 
-
 ```{r check-one-trimmmed-quality}
 print(plotQualityProfile("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live_filt/AB1_t2_PEAR.assembled.fastq"))
 
@@ -222,14 +225,11 @@ names(derep_all) <- sample.names
 For learning errors, used code here because the one in the Callahan et al. paper didn't work, but this is by the same author:
 ```{r learn-errors, eval=FALSE}
 
-
 error_all = learnErrors(derep_all, multithread = TRUE) # by default the learnErrors function uses only a subset of the data (the first 100 M bases); can increase if desired. 
 
 #err_all = learnErrors(derep_all, multithread = TRUE, nbases = 1e9) 
 
 saveRDS(error_all, "../data/error_all")
-
-
 
 ```
 
@@ -255,7 +255,7 @@ dada_all = dada(derep_all, err=error_all, pool=TRUE, multithread= TRUE)
 
 ### STEP 6: SEQ TABLE + REMOVE CHIMERAS
 Live samples:Construct Sequence table + Remove Chimeras 
-```{r, eval=FALSE}
+```{r make_sequence_table, eval=FALSE}
 
 seqtab = makeSequenceTable(dada_all)
 
@@ -267,7 +267,7 @@ nochim_seqtab.all <- removeBimeraDenovo(seqtab, method="consensus", multithread=
 Live samples: Classify Taxonomy
 The training datasets are too large to upload to github, so it's best to keep the files on your computer 
 I used the `DECIPHER` package in the next step to assign the taxonomy, it is faster
-```{r classify taxonomy, eval=FALSE}
+```{r classify-taxonomy, eval=FALSE}
 
 #ref_fasta = "~/Desktop/Landfill_Project/16s_data/silva_nr_v138_train_set.fa.gz"
 #print(ref_fasta)
@@ -277,169 +277,47 @@ I used the `DECIPHER` package in the next step to assign the taxonomy, it is fas
 
 ```
 
-#### STEP 7.1: ASSIGN TAXONOMY ANOTHER WAY. 
+#### STEP 7.1: ASSIGN TAXONOMY WITH DECIPHER. 
+Code from here:http://www2.decipher.codes/ClassifyOrganismsCode.html
 
-This training dataset was small enough to store on github
-```{r}
+Download the training dataset for organismal classification: http://www2.decipher.codes/Downloads.html
+
+I used SILVA SSU r138 (modified)
+
+```{r classify-taxomy-decipher, eval = FALSE}
 
 dna <- DNAStringSet(getSequences(nochim_seqtab.all)) # Create a DNAStringSet from the ASVs
 
-load("~/data/taxonomy/SILVA_SSU_r138_2019.RData") # CHANGE TO THE PATH OF YOUR TRAINING SET
+load("~/Desktop/Landfill_Project/16s_data/SILVA_SSU_r138_2019.RData") # CHANGE TO THE PATH OF YOUR TRAINING SET
 
-ids <- IdTaxa(dna, trainingSet, strand="top", processors=NULL, verbose=FALSE) # use all processors
+ids <- DECIPHER::IdTaxa(dna,
+   trainingSet,
+   strand="both", # or "top" if same as trainingSet
+   threshold=60, # 60 (cautious) or 50 (sensible)
+   processors=NULL) # use all available processors
 
-ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
+
+saveRDS(ids, "../data/ids")
+
+
+
+```
+
+```{r convert-ids-to-usable-format, eval = FALSE}
+
+ids <- readRDS("../data/ids")
+
+ranks <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species") # ranks of interest
 
 # Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
-taxid <- t(sapply(ids, function(x) {
+taxid <- t(sapply(ids, function(x) { #sapply applies a function to each object in a list
         m <- match(ranks, x$rank)
         taxa <- x$taxon[m]
         taxa[startsWith(taxa, "unclassified_")] <- NA
         taxa
 }))
-colnames(taxid) <- ranks; rownames(taxid) <- getSequences(seqtab.nochim)
-
-
-```
-
-
-```{r, eval=FALSE}
-
-taxa <- assignTaxonomy(nochim_seqtab.all, "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz", multithread=TRUE)
-
-#Give our seq headers more manageable names (ASV_1, ASV_2...) and to write some tables. 
-asv_seqs <- colnames(nochim_seqtab.all)
-asv_headers <- vector(dim(nochim_seqtab.all)[2], mode="character")
-
-for (i in 1:dim(nochim_seqtab.all)[2]) {
-  asv_headers[i] <- paste(">ASV", i, sep="_")
-}
-
-# making and writing out a fasta of our final ASV seqs:
-asv_fasta <- c(rbind(asv_headers, asv_seqs))
-write(asv_fasta, "ASVs.fa")
-
-# count table:
-asv_tab <- t(nochim_seqtab.all)  
-# HEY. This looks like MT flipped the seqtab.nochim table for some reason. I'll leave it here for now and fix it below...
-row.names(asv_tab) <- sub(">", "", asv_headers)
-write.table(asv_tab, "ASVs_counts.tsv", sep="\t", quote=F, col.names=NA)
-
-# creating table of taxonomy [and setting any that are unclassified as "NA"....note that I didn't need to do this part, but left the script in, here, just as comments]. 
-ranks <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
-colnames(taxa) <- ranks
-rownames(taxa) <- gsub(pattern=">", replacement="", x=asv_headers)
-write.table(taxa, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
-
-# continuing on....
-# count_tab will hold the ASV and sample names
-count_tab <- read.table("ASVs_counts.tsv", header=T, row.names=1,
-                        check.names=F, sep="\t")
-# tax_tab will hold the ASVs and the taxa that go with them.
-tax_tab <- as.matrix(read.table("ASVs_taxonomy.tsv", header=T,
-                                row.names=1, check.names=F, sep="\t"))
-#check to see if these look reasonable. Note, if you have a lot of data, use 'head'
-count_tab
-tax_tab
-#At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
-#At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV. 
-
-# If your count_tab does NOT have the sample names in the rows, then you need to fix that. The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows). I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...
-
-#this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
-count_tab_t <- t(count_tab)
-tax_tab_t <- t(tax_tab)
-
-#check them again to make sure it's right.
-count_tab_t
-tax_tab_t
-#They should now both have the sample name.fastq on the rows in these version of the tables.
-
-#It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
-rownames(count_tab_t)
-
-```
-
-##### REPEAT STEPS 2-7 FOR THE KILLED MICROCOSMS
-```{r, Killed_quality check,  eval=FALSE}
-NKi <- sample(length(fns_NK), 33) 
-for(i in NKi) { print(plotQualityProfile(fns_NK[i]) + ggtitle("NK paired")) }
-
-
-killedi = sample(length(fns_killed), 94)
-for(i in killedi) {print (plotQualityProfile(fns_killed[i])+ ggtitle("killed paired"))}
-
-
-```
-
-```{r, STEP2.1, eval=FALSE}
-#killed 
-killed_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed")
-
-#filt path
-killed_filt_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_filt")
-fns_killed = sort(list.files(killed_path, full.names = TRUE))
-
-
-#filter and trim
-#all killed 
-if(!file_test("-d", killed_path)) dir.create(killed_filt_path)
-filt_killed <- file.path(killed_filt_path, basename(fns_killed))
-for(i in seq_along(fns_killed)) {filterAndTrim(fns_killed, filt_killed, 
-                rev = NULL, 
-                filt.rev =NULL, 
-                trimLeft=c(10), truncLen=c(290),
-                maxN=0, maxEE=c(2), truncQ=2, rm.phix=TRUE, compress=TRUE, multithread=TRUE)}
-#many failed quality check so I'm going to filter and trim the experiments separately 
-#I didn't finish running this.. but it looks like many worked
-#actually I'm just going to re-do this one again and let it run all the way through 
-
-
-#check quality 
-killed_filt = sample(length(filt_killed), 93) 
-
-killed_filt = sample(length(filt_killed), 93) 
-for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("killed filt paired")) }
-
-
-#ABK1-T6 has low read count: 3290
-#ABK3-T1 has low read count: 1484 
-#SK1-T6 is poor quality and low read count, definetly out
-#SK3-T4 is low quality
-#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
-#Lots of NKs have low quality and or/ low read count: NK6-T7, NK2-T2 
-#ABK1-T6 has low read count: 3290
-#ABK3-T1 has low read count: 1484 
-#SK1-T6 is poor quality and low read count, definetly out
-#SK3-T4 is low quality
-#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
-```
-
-```{r, step3-4, eval=FALSE}
-#dereplication
-derep_killed = derepFastq(filt_killed)
-sam.names_killed = sapply(strsplit(basename(filt_killed), "_"), `[`, 1)
-names(derep_killed) = sam.names_killed
-
-#learning errors
-err_killed = learnErrors(derep_killed, multithread = TRUE, nbases = 1e9) #this used all of the samples, we'll see how long it takes.q§
-plotErrors(err_killed, nominalQ=TRUE)
-
-```
-
-```{r steps5-7, eval=FALSE}
-#dada seq inference method
-dada_killed = dada(derep_killed, err=err_killed, pool=TRUE, multithread= TRUE)
-
-
-#construct seq tab and remove chimeras 
-seqtab_killed = makeSequenceTable(dada_killed)
-nochim_seqtab_killed = removeBimeraDenovo(seqtab_killed, method="consensus", multithread=TRUE, verbose=TRUE)
-
-#classify taxanomy
-ref_fasta = "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz"
-taxtab_killed = assignTaxonomy(nochim_seqtab_killed, refFasta = ref_fasta)
-colnames(taxtab_killed) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+colnames(taxid) <- ranks #assign ranks to the taxid
+rownames(taxid) <- getSequences(nochim_seqtab.all)  
 
 ```
 
@@ -449,11 +327,15 @@ Live: Construct phylogenetic trees
 ```{r, eval=FALSE}
 
 # Tree for all samples
-all_seq = getSequences(nochim_seqtab.all)
-names(all_seq) = all_seq
-alignment_all = AlignSeqs(DNAStringSet(all_seq), anchor=NA) #multiple seq alignment
+all_seq <- getSequences(nochim_seqtab.all)
+
+names(all_seq) <- all_seq
+
+alignment_all <- AlignSeqs(DNAStringSet(all_seq), anchor=NA) #multiple seq alignment
+
 all_phang.align<- phyDat(as(alignment_all, "matrix"), type="DNA") #The phangorn R package is then used to construct a phylogenetic tree.
 #neighborjoining tree
+
 all_dm <- dist.ml(all_phang.align) 
 all_treeNJ <- NJ(all_dm) # Note, tip order != sequence order
 all_fit = pml(all_treeNJ, data=all_phang.align)
@@ -464,75 +346,13 @@ all_fitGTR <- optim.pml(all_fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
 detach("package:phangorn", unload=TRUE)
 
 
-
-#seperate trees for each experimental group
-
-#AB
-seqs_AB <- getSequences(nochim_seqtab.AB)
-names(seqs_AB) <- seqs_AB # This propagates to the tip labels of the tree
-alignment_AB <- AlignSeqs(DNAStringSet(seqs_AB), anchor=NA)#Multiple sequence alightment
-
-#The phangorn R package is then used to construct a phylogenetic tree. 
-#Here we first construct a neighbor-joining tree, and then fit a GTR+G+I (Generalized time-reversible with Gamma rate variation) maximum likelihood tree using the neighbor-joining tree as a starting point.
-
-phang.align <- phyDat(as(alignment_AB, "matrix"), type="DNA")
-dm <- dist.ml(phang.align)
-treeNJ <- NJ(dm) # Note, tip order != sequence order
-fit = pml(treeNJ, data=phang.align)
-fitGTR <- update(fit, k=4, inv=0.2)
-fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
-                    rearrangement = "stochastic", control = pml.control(trace = 0))
-detach("package:phangorn", unload=TRUE)
-
-
-#NL 
-#NL tree construction
-seqs_NL <- getSequences(nochim_seqtab.NL)
-names(seqs_NL) <- seqs_NL # This propagates to the tip labels of the tree
-alignment_NL <- AlignSeqs(DNAStringSet(seqs_NL), anchor=NA)
-phang.align <- phyDat(as(alignment_NL, "matrix"), type="DNA")
-dm <- dist.ml(phang.align)
-treeNJ <- NJ(dm) # Note, tip order != sequence order
-fit = pml(treeNJ, data=phang.align)
-
-## negative edges length changed to 0!
-fitGTR_NL <- update(fit, k=4, inv=0.2)
-fitGTR_NL <- optim.pml(fitGTR_NL, model="GTR", optInv=TRUE, optGamma=TRUE,
-                    rearrangement = "stochastic", control = pml.control(trace = 0))
-detach("package:phangorn", unload=TRUE)
-
 ```
 
-STEP 8: MAKE A TREE
-Killed: Construct phylogenetic trees
-```{r, eval=FALSE}
-
-killed_seq = getSequences(nochim_seqtab_killed)
-names(killed_seq) = killed_seq
-alignment_killed = AlignSeqs(DNAStringSet(killed_seq), anchor=NA) #multiple seq alignment
-killed_phang.align = phyDat(as(alignment_killed, "matrix"), type="DNA") #The phangorn R package is then used to construct a phylogenetic tree.
-#neighborjoining tree
-killed_dm <- dist.ml(killed_phang.align) #compute pairwise distances 
-killed_treeNJ <- NJ(killed_dm) # Note, tip order != sequence order
-killed_fit = pml(killed_treeNJ, data=killed_phang.align)  # computes likelihood of a tree given a sequence alignment and a model
-#GTR+G+I tree
-killed_fitGTR <- update(killed_fit, k=4, inv=0.2) # I'm not sure why k and inv are set at these values
-killed_fitGTR <- optim.pml(killed_fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
-                    rearrangement = "stochastic", control = pml.control(trace = 0))
-
-
-
-```
-
-#Step 9: Load metadata
+### Step 9: Load metadata
 Load metadata + make sure metadata files match the seq tab files
 ```{r, eval=FALSE}
-AB_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/AB_metadata.csv")
-Fe_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/Fe_metadata.csv")
-S_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/S_metadata.csv")
-NL_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/NL_metadata.csv")
+
 all_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/allmetadata.csv")
-killed_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_metadata.csv")
 
 #all 
 all(rownames(nochim_seqtab.all) %in% all_metadata$sample)
@@ -547,70 +367,12 @@ rownames(all_metadata)
 #all_metadata$Spike = as.factor(all_metadata$Spike)
 #all_metadata$Sample_Time = as.factor(all_metadata$Sample_Time)
 
-#killed 
-all(rownames(nochim_seqtab_killed) %in% killed_metadata$sample)
-rownames(killed_metadata) = killed_metadata$sample
-rownames(nochim_seqtab_killed) =c("ABK1",   "ABK1.1", "ABK1.2", "ABK1.3" ,"ABK1.4", "ABK1.5", "ABK1.6" ,"ABK2" ,  "ABK2.1", "ABK2.2", "ABK2.3" ,"ABK2.4" ,"ABK2.5", "ABK2.6", "ABK3",   "ABK3.1", "ABK3.2", "ABK3.3", "ABK3.4" ,"ABK3.5", "ABK3.6", "FeK1"  , "FeK1.1", "FeK1.2", "FeK1.3", "FeK1.4" ,"FeK1.5", "FeK1.6", "FeK2" ,  "FeK2.1", "FeK2.2" ,"FeK2.3" ,"feK2" ,  "FeK2.4" ,"FeK2.5", "FeK3", "FeK3.1", "FeK3.2" ,"FeK3.3", "FeK3.4" , "FeK3.5" ,"FeK3.6" ,"NK1"  ,  "NK1.1" , "NK1.2" , "NK1.3",  "NK2" ,   "NK2.1" , "NK2.2" , "NK2.3"  , "NK3",    "NK3.1" , "NK3.2" , "NK3.3" , "NK4"   , "NK4.1" , "NK4.2" , "NK4.3" , "NK4.4" , "NK4.5"  ,"NK4.6",  "NK5"  ,  "NK5.1" , "NK5.2" , "NK5.3" , "NK5.4" , "NK5.5",  "NK5.6",  "NK6",    "NK6.1" ,"NK6.2",  "NK6.3" , "NK6.4",  "NK6.5" , "NK6.6" , "SK1" ,   "SK1.1",  "SK1.2",  "SK1.3" , "SK2",  "SK2.1" , "SK2.2" , "SK2.3" , "SK2.4" , "SK2.5" , "SK2.6",  "SK3" ,   "SK3.1",  "SK3.2" ,"SK3.3","SK3.4" , "SK3.5" , "SK3.6")
-identical(rownames(nochim_seqtab_killed), rownames(killed_metadata)) 
-
-
-
-#AB
-#row names in nochim seq tab and in the metadata file need to be identitical
-all(rownames(seqtab.AB) %in% AB_metadata$sample)
-#this needs to be true in order to continue, the sample names in the metadata table need to be the same as in the seq table 
-rownames(AB_metadata) = AB_metadata$sample #this added a row name that was the same as the seqtab row name
-rownames(nochim_seqtab.AB) = c("AB1","AB1.1","AB1.2","AB1.3","AB1.4","AB1.5", "AB2",   "AB2.1", "AB2.2", "AB2.3", "AB2.4" ,"AB2.5", "AB3"  , "AB3.1", "AB3.2", "AB3.3" ,"AB3.4")
-rownames(nochim_seqtab.AB)
-identical(rownames(nochim_seqtab.AB), rownames(AB_metadata)) 
-
-#NL
-all(rownames(seqtab.NL) %in% NL_metadata$sample)
-#this needs to be true in order to continue, the sample names in the metadata table need to be the same as in the seq table 
-rownames(NL_metadata) = NL_metadata$sample #this added a row name that was the same as the seqtab row name
-print(NL_metadata$sample)
-rownames(nochim_seqtab.NL) =  c("NL1", "NL1.1", "NL1.2", "NL1.3", "NL2", "NL2.1", "NL2.2", "NL2.3", "NL3", "NL3.1", "NL3.2", "NL3.3", "NL4", "NL4.1", "NL4.2", "NL4.3", "NL4.4", "NL4.5", "NL5", "NL5.1", "NL5.2", "NL5.3", "NL5.4", "NL5.5", "NL6", "NL6.1", "NL6.2", "NL6.3", "NL6.4", "NL6.5")
-#this step is because otherwise rownames appear like this: 
-##> rownames(nochim_seqtab.NL)
-##[1] "NL1" "NL1" "NL1" "NL1" "NL2" "NL2" "NL2" "NL2" "NL3" "NL3" "NL3" "NL3" "NL4" "NL4" "NL4" "NL4"
-##[17] "NL4" "NL4" "NL5" "NL5" "NL5" "NL5" "NL5" "NL5" "NL6" "NL6" "NL6" "NL6" "NL6" "NL6"
-rownames(nochim_seqtab.NL)
-rownames(NL_metadata)
-identical(rownames(nochim_seqtab.NL), rownames(NL_metadata)) 
-
-
-#Fe
-all(rownames(seqtab.Fe) %in% Fe_metadata$sample)
-#this needs to be true in order to continue, the sample names in the metadata table need to be the same as in the seq table 
-##FALSE 
-#Fe is fudged up with the row names, so I have to change them in the metadata file to match seqtab.Fe
-
-rownames(Fe_metadata) = Fe_metadata$sample #this added a row name that was the same as the seqtab row name
-print(Fe_metadata$sample)
-rownames(nochim_seqtab.Fe)
-rownames(nochim_seqtab.Fe) =  c ("Fe1", "Fe1.1", "Fe1.2", "Fe1.3", "Fe1.4", "Fe1.5", "Fe2", "Fe2.1", "Fe2.2", "fe2", "Fe2.3", "Fe2.4", "Fe3", "Fe3.1", "Fe3.2", "Fe3.3", "Fe3.4", "Fe3.5")
-rownames(nochim_seqtab.Fe)
-rownames(Fe_metadata)
-identical(rownames(nochim_seqtab.Fe), rownames(Fe_metadata)) 
-
-
-
-#S
-all(rownames(seqtab.S) %in% S_metadata$sample)
-#this needs to be true in order to continue, the sample names in the metadata table need to be the same as in the seq table 
-rownames(S_metadata) = S_metadata$sample #this added a row name that was the same as the seqtab row name
-print(S_metadata$sample)
-rownames(nochim_seqtab.S)
-rownames(nochim_seqtab.S) =  c ("S1", "S1.1", "S1.2", "S1.3", "S1.4", "S1.5", "S2", "S2.1", "S2.2", "S2.3", "S2.4", "S2.5", "S3", "S3.1", "S3.2", "S3.3", "S3.4", "S3.5")
-rownames(nochim_seqtab.S)
-rownames(S_metadata)
-identical(rownames(nochim_seqtab.S), rownames(S_metadata)) 
 
 
 
 ```
 
-#Step 10: Variance stablilizing transformation
+### Step 10: Variance stablilizing transformation
 ```{r, eval=FALSE}
 #make a count table 
 asv_tab <- t(nochim_seqtab.all)
@@ -662,10 +424,10 @@ plot(euc_dend, ylab="VST Euc. dist.")
 
 ```
 
-#Step 11: Make a phyloseq object W/ Variance Transformed seq tab from step 10 
+### Step 11: Make a phyloseq object W/ Variance Transformed seq tab from step 10 
 
 ```{r}
-setwd("~/Desktop/Landfill sequencing data processing /PEAR_merged")
+
 
 #rename the vst_trans_counts_tab.t. so that I know it has been changed
 vst_trans_count_tab.t.n = vst_trans_count_tab.t
@@ -757,6 +519,123 @@ new_ps_NL
 ps_S = phyloseq(otu_table(nochim_seqtab.S, taxa_are_rows = FALSE), sample_data(S_metadata), tax_table(taxtab.S))
 
 ps_Fe = phyloseq(otu_table(nochim_seqtab.Fe, taxa_are_rows = FALSE), sample_data(Fe_metadata), tax_table(taxtab.Fe))
+
+
+```
+
+
+## REPEAT STEPS 2-7 FOR THE KILLED MICROCOSMS
+```{r, Killed_quality check,  eval=FALSE}
+NKi <- sample(length(fns_NK), 33) 
+for(i in NKi) { print(plotQualityProfile(fns_NK[i]) + ggtitle("NK paired")) }
+
+
+killedi = sample(length(fns_killed), 94)
+for(i in killedi) {print (plotQualityProfile(fns_killed[i])+ ggtitle("killed paired"))}
+
+
+```
+
+```{r, STEP2.1, eval=FALSE}
+#killed 
+killed_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed")
+
+#filt path
+killed_filt_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_filt")
+fns_killed = sort(list.files(killed_path, full.names = TRUE))
+
+
+#filter and trim
+#all killed 
+if(!file_test("-d", killed_path)) dir.create(killed_filt_path)
+filt_killed <- file.path(killed_filt_path, basename(fns_killed))
+for(i in seq_along(fns_killed)) {filterAndTrim(fns_killed, filt_killed, 
+                rev = NULL, 
+                filt.rev =NULL, 
+                trimLeft=c(10), truncLen=c(290),
+                maxN=0, maxEE=c(2), truncQ=2, rm.phix=TRUE, compress=TRUE, multithread=TRUE)}
+#many failed quality check so I'm going to filter and trim the experiments separately 
+#I didn't finish running this.. but it looks like many worked
+#actually I'm just going to re-do this one again and let it run all the way through 
+
+
+#check quality 
+killed_filt = sample(length(filt_killed), 93) 
+
+killed_filt = sample(length(filt_killed), 93) 
+for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("killed filt paired")) }
+
+
+#ABK1-T6 has low read count: 3290
+#ABK3-T1 has low read count: 1484 
+#SK1-T6 is poor quality and low read count, definetly out
+#SK3-T4 is low quality
+#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
+#Lots of NKs have low quality and or/ low read count: NK6-T7, NK2-T2 
+#ABK1-T6 has low read count: 3290
+#ABK3-T1 has low read count: 1484 
+#SK1-T6 is poor quality and low read count, definetly out
+#SK3-T4 is low quality
+#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
+```
+
+```{r, step3-4, eval=FALSE}
+#dereplication
+derep_killed = derepFastq(filt_killed)
+sam.names_killed = sapply(strsplit(basename(filt_killed), "_"), `[`, 1)
+names(derep_killed) = sam.names_killed
+
+#learning errors
+err_killed = learnErrors(derep_killed, multithread = TRUE, nbases = 1e9) #this used all of the samples, we'll see how long it takes.q§
+plotErrors(err_killed, nominalQ=TRUE)
+
+```
+
+```{r steps5-7, eval=FALSE}
+#dada seq inference method
+dada_killed = dada(derep_killed, err=err_killed, pool=TRUE, multithread= TRUE)
+
+
+#construct seq tab and remove chimeras 
+seqtab_killed = makeSequenceTable(dada_killed)
+nochim_seqtab_killed = removeBimeraDenovo(seqtab_killed, method="consensus", multithread=TRUE, verbose=TRUE)
+
+#classify taxanomy
+ref_fasta = "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz"
+taxtab_killed = assignTaxonomy(nochim_seqtab_killed, refFasta = ref_fasta)
+colnames(taxtab_killed) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+
+```
+
+
+```{r killed-step-8, eval=FALSE}
+
+killed_seq = getSequences(nochim_seqtab_killed)
+names(killed_seq) = killed_seq
+alignment_killed = AlignSeqs(DNAStringSet(killed_seq), anchor=NA) #multiple seq alignment
+killed_phang.align = phyDat(as(alignment_killed, "matrix"), type="DNA") #The phangorn R package is then used to construct a phylogenetic tree.
+#neighborjoining tree
+killed_dm <- dist.ml(killed_phang.align) #compute pairwise distances 
+killed_treeNJ <- NJ(killed_dm) # Note, tip order != sequence order
+killed_fit = pml(killed_treeNJ, data=killed_phang.align)  # computes likelihood of a tree given a sequence alignment and a model
+#GTR+G+I tree
+killed_fitGTR <- update(killed_fit, k=4, inv=0.2) # I'm not sure why k and inv are set at these values
+killed_fitGTR <- optim.pml(killed_fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+                    rearrangement = "stochastic", control = pml.control(trace = 0))
+
+
+
+```
+
+```{r load-metadata-killed}
+
+killed_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_metadata.csv")
+
+#killed 
+all(rownames(nochim_seqtab_killed) %in% killed_metadata$sample)
+rownames(killed_metadata) = killed_metadata$sample
+rownames(nochim_seqtab_killed) =c("ABK1",   "ABK1.1", "ABK1.2", "ABK1.3" ,"ABK1.4", "ABK1.5", "ABK1.6" ,"ABK2" ,  "ABK2.1", "ABK2.2", "ABK2.3" ,"ABK2.4" ,"ABK2.5", "ABK2.6", "ABK3",   "ABK3.1", "ABK3.2", "ABK3.3", "ABK3.4" ,"ABK3.5", "ABK3.6", "FeK1"  , "FeK1.1", "FeK1.2", "FeK1.3", "FeK1.4" ,"FeK1.5", "FeK1.6", "FeK2" ,  "FeK2.1", "FeK2.2" ,"FeK2.3" ,"feK2" ,  "FeK2.4" ,"FeK2.5", "FeK3", "FeK3.1", "FeK3.2" ,"FeK3.3", "FeK3.4" , "FeK3.5" ,"FeK3.6" ,"NK1"  ,  "NK1.1" , "NK1.2" , "NK1.3",  "NK2" ,   "NK2.1" , "NK2.2" , "NK2.3"  , "NK3",    "NK3.1" , "NK3.2" , "NK3.3" , "NK4"   , "NK4.1" , "NK4.2" , "NK4.3" , "NK4.4" , "NK4.5"  ,"NK4.6",  "NK5"  ,  "NK5.1" , "NK5.2" , "NK5.3" , "NK5.4" , "NK5.5",  "NK5.6",  "NK6",    "NK6.1" ,"NK6.2",  "NK6.3" , "NK6.4",  "NK6.5" , "NK6.6" , "SK1" ,   "SK1.1",  "SK1.2",  "SK1.3" , "SK2",  "SK2.1" , "SK2.2" , "SK2.3" , "SK2.4" , "SK2.5" , "SK2.6",  "SK3" ,   "SK3.1",  "SK3.2" ,"SK3.3","SK3.4" , "SK3.5" , "SK3.6")
+identical(rownames(nochim_seqtab_killed), rownames(killed_metadata)) 
 
 
 ```

@@ -91,7 +91,7 @@ all_live_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/al
 
 #path to a new file where I'll put the filtered 
 
-all_filt_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/killed")
+all_filt_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live_filt")
 
 ```
 
@@ -118,6 +118,8 @@ Look at the quality plot of one sample first to make sure this step works. Check
 dada2::plotQualityProfile("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live/AB1_t1_PEAR.assembled.fastq")
 
 ```
+
+
 
 ```{r,  qualitycheck-merged-reads, eval=FALSE}
 
@@ -155,6 +157,7 @@ This step will take a while
 #all_live 
 
 if(!file_test("-d", all_live_path)) dir.create(all_filt_path) 
+
 
 filt_all <- file.path(all_filt_path, basename(fns_all))
 

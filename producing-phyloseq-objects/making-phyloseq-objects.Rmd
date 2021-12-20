@@ -49,7 +49,7 @@ Uncomment and run this chunk only if you don't have the packages needed in the n
 ```
 
 It doesn't matter if the package names have quotes or not
-```{r load-packages, message=FALSE}
+```{r load-packages, message=FALSE, warning=FALSE}
 
 
 library(dada2); packageVersion("dada2")
@@ -109,7 +109,7 @@ Important files made in part one:
   
 ----
 
-### STEP1: GETTING FILES READY
+### STEP 1: GETTING FILES READY
 Live samples: Create a path to the files being used
 ```{r fastq-file-path}
 
@@ -124,7 +124,7 @@ fns_all <- sort(list.files(all_live_path, full.names = TRUE)) #sort ensures forw
 ```
 
 
-### STEP2: QUALITY CHECKING
+### STEP 2: QUALITY CHECKING
 
 Live Samples: Check quality of paired reads 
 
@@ -505,18 +505,11 @@ vst_all = readRDS("~/Desktop/16s_script/vst_all")
 ```
 
 
-
-
-
-
 ## REPEAT! For any other samples
 
 #### "killed" microcosms 
 
 ```{r, Killed_quality check,  eval=FALSE}
-NKi <- sample(length(fns_NK), 33) 
-for(i in NKi) { print(plotQualityProfile(fns_NK[i]) + ggtitle("NK paired")) }
-
 
 killedi = sample(length(fns_killed), 94)
 for(i in killedi) {print (plotQualityProfile(fns_killed[i])+ ggtitle("killed paired"))}
@@ -525,6 +518,7 @@ for(i in killedi) {print (plotQualityProfile(fns_killed[i])+ ggtitle("killed pai
 ```
 
 ```{r, STEP2.1, eval=FALSE}
+
 #killed 
 killed_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed")
 
@@ -548,9 +542,8 @@ for(i in seq_along(fns_killed)) {filterAndTrim(fns_killed, filt_killed,
 
 
 #check quality 
-killed_filt = sample(length(filt_killed), 93) 
+killed_filt <- sample(length(filt_killed), 93) 
 
-killed_filt = sample(length(filt_killed), 93) 
 for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("killed filt paired")) }
 
 
@@ -568,6 +561,7 @@ for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("kille
 ```
 
 ```{r, step3-4, eval=FALSE}
+
 #dereplication
 derep_killed = derepFastq(filt_killed)
 sam.names_killed = sapply(strsplit(basename(filt_killed), "_"), `[`, 1)
@@ -582,8 +576,6 @@ plotErrors(err_killed, nominalQ=TRUE)
 ```{r steps5-7, eval=FALSE}
 #dada seq inference method
 dada_killed = dada(derep_killed, err=err_killed, pool=TRUE, multithread= TRUE)
-
-
 #construct seq tab and remove chimeras 
 seqtab_killed = makeSequenceTable(dada_killed)
 nochim_seqtab_killed = removeBimeraDenovo(seqtab_killed, method="consensus", multithread=TRUE, verbose=TRUE)
@@ -596,7 +588,12 @@ colnames(taxtab_killed) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "G
 ```
 
 
-```{r killed-step-8, eval=FALSE}
+```{r step-7-classify-taxonomy-with-DECIPHER}
+
+```
+
+
+```{r killed-step-8-make-tree, eval=FALSE}
 
 killed_seq = getSequences(nochim_seqtab_killed)
 names(killed_seq) = killed_seq

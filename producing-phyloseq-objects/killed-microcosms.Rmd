@@ -9,22 +9,146 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+#### "killed" microcosms 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r, Killed_quality check,  eval=FALSE}
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+killedi = sample(length(fns_killed), 94)
+for(i in killedi) {print (plotQualityProfile(fns_killed[i])+ ggtitle("killed paired"))}
 
-```{r cars}
-summary(cars)
+
 ```
 
-## Including Plots
+```{r, STEP2.1, eval=FALSE}
 
-You can also embed plots, for example:
+#killed 
+killed_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed")
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#filt path
+killed_filt_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_filt")
+fns_killed = sort(list.files(killed_path, full.names = TRUE))
+
+
+#filter and trim
+#all killed 
+if(!file_test("-d", killed_path)) dir.create(killed_filt_path)
+filt_killed <- file.path(killed_filt_path, basename(fns_killed))
+for(i in seq_along(fns_killed)) {filterAndTrim(fns_killed, filt_killed, 
+                rev = NULL, 
+                filt.rev =NULL, 
+                trimLeft=c(10), truncLen=c(290),
+                maxN=0, maxEE=c(2), truncQ=2, rm.phix=TRUE, compress=TRUE, multithread=TRUE)}
+#many failed quality check so I'm going to filter and trim the experiments separately 
+#I didn't finish running this.. but it looks like many worked
+#actually I'm just going to re-do this one again and let it run all the way through 
+
+
+#check quality 
+killed_filt <- sample(length(filt_killed), 93) 
+
+for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("killed filt paired")) }
+
+
+#ABK1-T6 has low read count: 3290
+#ABK3-T1 has low read count: 1484 
+#SK1-T6 is poor quality and low read count, definetly out
+#SK3-T4 is low quality
+#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
+#Lots of NKs have low quality and or/ low read count: NK6-T7, NK2-T2 
+#ABK1-T6 has low read count: 3290
+#ABK3-T1 has low read count: 1484 
+#SK1-T6 is poor quality and low read count, definetly out
+#SK3-T4 is low quality
+#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r, step3-4, eval=FALSE}
+
+#dereplication
+derep_killed = derepFastq(filt_killed)
+sam.names_killed = sapply(strsplit(basename(filt_killed), "_"), `[`, 1)
+names(derep_killed) = sam.names_killed
+
+#learning errors
+err_killed = learnErrors(derep_killed, multithread = TRUE, nbases = 1e9) #this used all of the samples, we'll see how long it takes.q§
+plotErrors(err_killed, nominalQ=TRUE)
+
+```
+
+```{r steps5-7, eval=FALSE}
+#dada seq inference method
+dada_killed = dada(derep_killed, err=err_killed, pool=TRUE, multithread= TRUE)
+#construct seq tab and remove chimeras 
+seqtab_killed = makeSequenceTable(dada_killed)
+nochim_seqtab_killed = removeBimeraDenovo(seqtab_killed, method="consensus", multithread=TRUE, verbose=TRUE)
+
+#classify taxanomy
+ref_fasta = "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz"
+taxtab_killed = assignTaxonomy(nochim_seqtab_killed, refFasta = ref_fasta)
+colnames(taxtab_killed) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+
+```
+
+
+```{r step-7-classify-taxonomy-with-DECIPHER}
+
+```
+
+
+```{r killed-step-8-make-tree, eval=FALSE}
+
+killed_seq = getSequences(nochim_seqtab_killed)
+names(killed_seq) = killed_seq
+alignment_killed = AlignSeqs(DNAStringSet(killed_seq), anchor=NA) #multiple seq alignment
+killed_phang.align = phyDat(as(alignment_killed, "matrix"), type="DNA") #The phangorn R package is then used to construct a phylogenetic tree.
+#neighborjoining tree
+killed_dm <- dist.ml(killed_phang.align) #compute pairwise distances 
+killed_treeNJ <- NJ(killed_dm) # Note, tip order != sequence order
+killed_fit = pml(killed_treeNJ, data=killed_phang.align)  # computes likelihood of a tree given a sequence alignment and a model
+#GTR+G+I tree
+killed_fitGTR <- update(killed_fit, k=4, inv=0.2) # I'm not sure why k and inv are set at these values
+killed_fitGTR <- optim.pml(killed_fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+                    rearrangement = "stochastic", control = pml.control(trace = 0))
+
+
+
+```
+
+```{r load-metadata-killed, eval = FALSE}
+
+killed_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_metadata.csv")
+
+#killed 
+all(rownames(nochim_seqtab_killed) %in% killed_metadata$sample)
+rownames(killed_metadata) = killed_metadata$sample
+rownames(nochim_seqtab_killed) =c("ABK1",   "ABK1.1", "ABK1.2", "ABK1.3" ,"ABK1.4", "ABK1.5", "ABK1.6" ,"ABK2" ,  "ABK2.1", "ABK2.2", "ABK2.3" ,"ABK2.4" ,"ABK2.5", "ABK2.6", "ABK3",   "ABK3.1", "ABK3.2", "ABK3.3", "ABK3.4" ,"ABK3.5", "ABK3.6", "FeK1"  , "FeK1.1", "FeK1.2", "FeK1.3", "FeK1.4" ,"FeK1.5", "FeK1.6", "FeK2" ,  "FeK2.1", "FeK2.2" ,"FeK2.3" ,"feK2" ,  "FeK2.4" ,"FeK2.5", "FeK3", "FeK3.1", "FeK3.2" ,"FeK3.3", "FeK3.4" , "FeK3.5" ,"FeK3.6" ,"NK1"  ,  "NK1.1" , "NK1.2" , "NK1.3",  "NK2" ,   "NK2.1" , "NK2.2" , "NK2.3"  , "NK3",    "NK3.1" , "NK3.2" , "NK3.3" , "NK4"   , "NK4.1" , "NK4.2" , "NK4.3" , "NK4.4" , "NK4.5"  ,"NK4.6",  "NK5"  ,  "NK5.1" , "NK5.2" , "NK5.3" , "NK5.4" , "NK5.5",  "NK5.6",  "NK6",    "NK6.1" ,"NK6.2",  "NK6.3" , "NK6.4",  "NK6.5" , "NK6.6" , "SK1" ,   "SK1.1",  "SK1.2",  "SK1.3" , "SK2",  "SK2.1" , "SK2.2" , "SK2.3" , "SK2.4" , "SK2.5" , "SK2.6",  "SK3" ,   "SK3.1",  "SK3.2" ,"SK3.3","SK3.4" , "SK3.5" , "SK3.6")
+identical(rownames(nochim_seqtab_killed), rownames(killed_metadata)) 
+
+
+```
+
+```{r killed-phyloseq-object, eval = FALSE}
+
+#phyloseq object for killed
+ps_killed = phyloseq(otu_table(nochim_seqtab_killed, taxa_are_rows = FALSE), sample_data(killed_metadata), tax_table(taxtab_killed), phy_tree(killed_fitGTR$tree))
+
+
+```
+
+#save phyloseq objects onto the desktop
+```{r, eval = FALSE}
+
+saveRDS(all, file = "~/Desktop/16s_script/killed" )
+```
+
+
+#reload the phyloseq objects 
+```{r, eval = FALSE}
+
+killed = readRDS("~/Desktop/16s_script/killed")
+
+
+```
+
+
+

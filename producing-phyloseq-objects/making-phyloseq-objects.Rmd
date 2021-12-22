@@ -165,7 +165,7 @@ to be incorrect. Table 1 shows the relationship between the base call
 quality scores and their corresponding error probabilities (https://www.illumina.com/content/dam/illumina-marketing/documents/products/technotes/technote_understanding_quality_scores.pdf)
 
 
-### STEP 2.1: FILTERING
+####  STEP 2.1: FILTERING
 
 We use standard filtering parameters, the most important being the enforcement of a maximum of 2 expected errors per-read [https://academic.oup.com/bioinformatics/article/31/21/3476/194979].
 
@@ -267,7 +267,7 @@ nochim_seqtab.all <- removeBimeraDenovo(seqtab, method="consensus", multithread=
 
 ```
 
-### STEP 7: CLASSIFY TAXONOMY
+### STEP 7: CLASSIFY TAXONOMY WITH DADA2
 Live samples: Classify Taxonomy
 The training datasets are too large to upload to github, so it's best to keep the files on your computer 
 I used the `DECIPHER` package in the next step to assign the taxonomy, it is faster
@@ -290,7 +290,7 @@ This is a continuation of the previous step, don't think it can be used with DEP
 ```
 
 
-#### STEP 7.1: ASSIGN TAXONOMY WITH DECIPHER. 
+### STEP 7.1: ASSIGN TAXONOMY WITH DECIPHER. 
 Code from here:http://www2.decipher.codes/ClassifyOrganismsCode.html
 
 Download the training dataset for organismal classification: http://www2.decipher.codes/Downloads.html
@@ -477,7 +477,7 @@ identical(rownames(vst_trans_count_tab.t), rownames(all_metadata)) #should be tr
 
 ```{r make-variance-stablizing-trans-phyloseq-object, eval = FALSE}
 
-vst_all = phyloseq(vst_trans_count_tab, all_metadata, tax_tab, phy_tree(all_fitGTR$tree))
+vst_all = phyloseq(vst_trans_count_tab, all_metadata, taxid, phy_tree(all_fitGTR$tree))
 
 ```
 
@@ -494,7 +494,7 @@ ps_all = phyloseq(otu_table(nochim_seqtab.all, taxa_are_rows = FALSE), sample_da
 ```{r, eval = FALSE}
 
 saveRDS(vst_all, file = "../data/vst_all")
-saveRDS(all, file = "../data/all")
+saveRDS(ps_all, file = "../data/ps_all")
 
 ```
 

@@ -9,42 +9,90 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#### "killed" microcosms 
 
+```{r load-packages, message=FALSE, warning=FALSE}
+
+
+library(dada2); packageVersion("dada2")
+library(ggplot2)
+library(gridExtra)
+library(phyloseq)
+library(DECIPHER)
+library(phangorn)
+require("tidyverse")
+library("dplyr")
+library("rmarkdown")
+library("vegan")
+library("PoiClaClu")
+library("doParallel")
+library("plotly")
+library("microbiome")
+library("DESeq2")
+library("ggpubr")
+library("viridis")
+library("plyr")
+library("magrittr")
+library("scales")
+#library("data.table")
+#library(grid)
+#library(reshape2)
+#library(randomForest)
+
+```
+
+
+
+Step 1: Getting the Files ready 
+```{r get-files-ready}
+
+killed_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/killed")
+killed_filt_path = file.path("~/Desktop/Landfill_Project/16s_data/PEAR_merged/killed_filt")
+
+```
+
+
+Step 2: Quality checking
 ```{r, Killed_quality check,  eval=FALSE}
 
 killedi = sample(length(fns_killed), 94)
+
 for(i in killedi) {print (plotQualityProfile(fns_killed[i])+ ggtitle("killed paired"))}
 
 
 ```
 
+Step 2.1: Filter and Trim
 ```{r, STEP2.1, eval=FALSE}
 
-#killed 
-killed_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed")
-
-#filt path
-killed_filt_path = file.path("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_filt")
 fns_killed = sort(list.files(killed_path, full.names = TRUE))
 
 
 #filter and trim
 #all killed 
 if(!file_test("-d", killed_path)) dir.create(killed_filt_path)
+
 filt_killed <- file.path(killed_filt_path, basename(fns_killed))
+
 for(i in seq_along(fns_killed)) {filterAndTrim(fns_killed, filt_killed, 
                 rev = NULL, 
                 filt.rev =NULL, 
                 trimLeft=c(10), truncLen=c(290),
                 maxN=0, maxEE=c(2), truncQ=2, rm.phix=TRUE, compress=TRUE, multithread=TRUE)}
+
 #many failed quality check so I'm going to filter and trim the experiments separately 
 #I didn't finish running this.. but it looks like many worked
 #actually I'm just going to re-do this one again and let it run all the way through 
 
 
+ 
+```
+
+Step 2.2: check trimmed quality 
+```{r check-trimmed-quality, eval = F}
+
 #check quality 
-killed_filt <- sample(length(filt_killed), 93) 
+
+killed_filt <- sample(length(filt_killed), 94) 
 
 for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("killed filt paired")) }
 
@@ -59,42 +107,102 @@ for(i in killed_filt) {print(plotQualityProfile(filt_killed[i]) + ggtitle("kille
 #ABK3-T1 has low read count: 1484 
 #SK1-T6 is poor quality and low read count, definetly out
 #SK3-T4 is low quality
-#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7 
+#Some FeKs have read counts on the lower end of the spectrum; FeK3-T7
+
 ```
 
-```{r, step3-4, eval=FALSE}
+Step 3: Derplication 
+```{r, step3-dereplication, eval=FALSE}
 
 #dereplication
 derep_killed = derepFastq(filt_killed)
 sam.names_killed = sapply(strsplit(basename(filt_killed), "_"), `[`, 1)
 names(derep_killed) = sam.names_killed
 
-#learning errors
-err_killed = learnErrors(derep_killed, multithread = TRUE, nbases = 1e9) #this used all of the samples, we'll see how long it takes.q§
-plotErrors(err_killed, nominalQ=TRUE)
+
 
 ```
 
-```{r steps5-7, eval=FALSE}
+Step 4: Error Rates
+```{r, step4-learn-error-rates, eval = F}
+
+#learning errors
+err_killed = learnErrors(derep_killed, multithread = TRUE) 
+plotErrors(err_killed, nominalQ=TRUE)
+
+
+```
+
+
+Step 5: Construct ASVs with `DADA2`
+```{r step5-dada2-asv, eval=FALSE}
 #dada seq inference method
 dada_killed = dada(derep_killed, err=err_killed, pool=TRUE, multithread= TRUE)
+
+)
+
+```
+
+Step 6: Make a sequence table and remove chimeras
+```{r step-7-make-seqtab, eval = F}
 #construct seq tab and remove chimeras 
 seqtab_killed = makeSequenceTable(dada_killed)
 nochim_seqtab_killed = removeBimeraDenovo(seqtab_killed, method="consensus", multithread=TRUE, verbose=TRUE)
 
+```
+
+
+Step 7: Assign taxomy with dada2
+```{r classify-taxonomy-dada2, eval = F}
+
 #classify taxanomy
-ref_fasta = "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz"
-taxtab_killed = assignTaxonomy(nochim_seqtab_killed, refFasta = ref_fasta)
-colnames(taxtab_killed) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus")
+#ref_fasta = "~/Desktop/Landfill sequencing data processing /silva_nr_v138_train_set.fa.gz"
+#taxtab_killed = assignTaxonomy(nochim_seqtab_killed, refFasta = ref_fasta)
+#colnames(taxtab_killed) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus"
 
 ```
 
 
-```{r step-7-classify-taxonomy-with-DECIPHER}
+Step 7.1: Assign taxonomy anothe with DECIPHER , fits with the variance stabilizing transformation in step 10
+```{r step-7-classify-taxonomy-with-DECIPHER, eval= F}
+
+nochim_seqtab_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/nochim_seqtab_killed") # I'm just re-loading the data from the previous step instead of running the first 6 steps over again
+
+dna_killed <- DNAStringSet(getSequences(nochim_seqtab_killed)) # Create a DNAStringSet from the ASVs
+
+load("~/Desktop/Landfill_Project/16s_data/SILVA_SSU_r138_2019.RData") # CHANGE TO THE PATH OF YOUR TRAINING SET
+
+ids_killed <- DECIPHER::IdTaxa(dna_killed,
+   trainingSet,
+   strand="top",
+   threshold = 60, # 60 is default
+   processors = NULL) # use all available processors
+
+```
+
+```{r convert-ids-to-usable-format, eval = FALSE}
+
+
+ranks <- c("domain", "phylum", "class", "order", "family", "genus", "species") # ranks of interest
+
+# Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+
+taxid_killed <- t(sapply(ids_killed, function(x) {
+        m <- match(ranks, x$rank)
+        taxa <- x$taxon[m]
+        taxa[startsWith(taxa, "unclassified_")] <- NA
+        taxa
+}))
+
+colnames(taxid_killed) <- ranks; rownames(taxid_killed) <- getSequences(nochim_seqtab_killed)
+
+saveRDS(taxid_killed, "../data/killed_microcosms_objects/taxid_killed") # save the converted taxa table to the data folder
 
 ```
 
 
+
+Step 8: Make phylogenetic tree 
 ```{r killed-step-8-make-tree, eval=FALSE}
 
 killed_seq = getSequences(nochim_seqtab_killed)
@@ -114,9 +222,10 @@ killed_fitGTR <- optim.pml(killed_fitGTR, model="GTR", optInv=TRUE, optGamma=TRU
 
 ```
 
+Step 9: load metadata
 ```{r load-metadata-killed, eval = FALSE}
 
-killed_metadata = read.csv("~/Desktop/Landfill sequencing data processing /PEAR_merged/killed_metadata.csv")
+killed_metadata = read.csv("~/landfill-microcosms/data/metadata/killed_metadata.csv")
 
 #killed 
 all(rownames(nochim_seqtab_killed) %in% killed_metadata$sample)
@@ -127,28 +236,150 @@ identical(rownames(nochim_seqtab_killed), rownames(killed_metadata))
 
 ```
 
+
+
+Step 10: Variance stablilizing transformation
+
+```{r make-count-tables, eval = FALSE}
+
+#Give our seq headers more manageable names (ASV_1, ASV_2...) and to write some tables. 
+asv_seqs_killed <- colnames(nochim_seqtab_killed)
+
+asv_headers_killed <- vector(dim(nochim_seqtab_killed)[2], mode="character")
+
+for (i in 1:dim(nochim_seqtab_killed)[2]) {
+  asv_headers_killed[i] <- paste(">ASV", i, sep="_")
+}
+
+# making and writing out a fasta of our final ASV seqs:
+asv_fasta_killed <- c(rbind(asv_headers_killed, asv_seqs_killed))
+
+write(asv_fasta_killed, "../data/killed_microcosms_objects/killed_ASVs.fa")
+
+
+asv_tab_killed <- t(nochim_seqtab_killed)  #transpose seq tab
+
+row.names(asv_tab_killed) <- sub(">", "", asv_headers_killed)
+
+write.table(asv_tab_killed,  "../data/killed_microcosms_objects/ASVs_counts_killed.tsv", sep="\t", quote=F, col.names=NA, row.names = T)
+
+# count_tab will hold the ASV and sample names
+
+count_tab_killed <- read.table("../data/killed_microcosms_objects/ASVs_counts_killed.tsv", header=T, row.names=1,
+                        check.names=F, sep="\t")
+
+# creating table of taxonomy [and setting any that are unclassified as "NA"...]
+write.table(taxid_killed, "../data/killed_microcosms_objects/ASVs_taxonomy_killed.tsv", sep = "\t", quote=F, col.names=NA)
+
+# tax_tab will hold the ASVs and the taxa that go with them.
+tax_tab_killed <- as.matrix(read.table("../data/killed_microcosms_objects/ASVs_taxonomy_killed.tsv", header=T,
+                                row.names=1, check.names=F, sep="\t"))
+
+
+#check to see if these look reasonable. Note, if you have a lot of data, use 'head'
+head(count_tab_killed)
+head(tax_tab_killed)
+#At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
+#At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV. 
+
+# If your count_tab does NOT have the sample names in the rows, then you need to fix that. 
+#The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows).
+#I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
+
+
+
+count_tab_killed.t <- t(count_tab_killed)
+head(count_tab_killed.t)
+
+#They should now both have the sample name.fastq on the rows in these version of the tables.
+#It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
+
+identical(rownames(count_tab_killed.t), rownames(killed_metadata)) #if this = TRUE, then you're good
+
+#there is a random row in count_tab_t_killed that is empty 
+
+
+
+```
+
+
+Step 10 continued
+```{r variance-stabilizing-transfromation, eval=FALSE, message = F}
+
+design <- as.formula(~spike)
+modelMartrix = model.matrix(design, data = killed_metadata)
+killed_metadata$sample = factor(killed_metadata$sample, 
+                             levels = c("Antibiotics", "Fe(OH)3", "Control", "Na2SO4"))
+
+modelMatrix = model.matrix(design, data= killed_metadata)
+
+
+deseq_counts.k <- DESeqDataSetFromMatrix(count_tab_killed, colData = killed_metadata, design = ~spike) 
+
+deseq_counts.k <- estimateSizeFactors(deseq_counts.k, type = "poscounts")
+
+deseq_counts_vst.k <- varianceStabilizingTransformation(deseq_counts.k)
+
+vst_trans_count_tab_killed <- assay(deseq_counts_vst.k) # so this is a transformed table 
+
+
+
+
+```
+
+
+
+STEP 10- rewritten; 
+The whole changing the count table to have easier ASV names is totally unnecessary.. Could skip the first two chunks and do just this one instead
+```{r try-another-way-to-do-transformation, eval = FALSE}
+
+design_killed <- as.formula(~spike)
+
+modelMartrix_killed <- model.matrix(design_killed, data = killed_metadata)
+
+killed_metadata$sample = factor(killed_metadata$sample, 
+                             levels = c("Antibiotics", "Fe(OH)3", "Control", "Na2SO4"))
+
+modelMatrix_killed = model.matrix(design_killed, data= killed_metadata)
+
+nochim_seqtab_killed.t <- t(nochim_seqtab_killed)
+
+deseq_counts.k <- DESeqDataSetFromMatrix(nochim_seqtab_killed.t, colData = killed_metadata, design = ~spike) 
+
+deseq_counts.k <- estimateSizeFactors(deseq_counts.k, type = "poscounts")
+
+deseq_counts_vst.k <- varianceStabilizingTransformation(deseq_counts.k)
+
+vst_trans_count_tab_killed <- assay(deseq_counts_vst.k) # so this is a transformed table 
+
+```
+
+
+
+Step 11:Make phyloseq objects
 ```{r killed-phyloseq-object, eval = FALSE}
 
-#phyloseq object for killed
-ps_killed = phyloseq(otu_table(nochim_seqtab_killed, taxa_are_rows = FALSE), sample_data(killed_metadata), tax_table(taxtab_killed), phy_tree(killed_fitGTR$tree))
+ps_killed = phyloseq(otu_table(nochim_seqtab_killed, taxa_are_rows = FALSE), sample_data(killed_metadata), tax_table(taxid_killed), phy_tree(killed_fitGTR$tree))
 
 
 ```
 
-#save phyloseq objects onto the desktop
-```{r, eval = FALSE}
+```{r physeq-with-vst, eval = F}
 
-saveRDS(all, file = "~/Desktop/16s_script/killed" )
-```
+vst_trans_count_tab_killed.t <- t(vst_trans_count_tab_killed)
 
+vst_killed <- phyloseq(otu_table(vst_trans_count_tab_killed, taxa_are_rows = T), sample_data(killed_metadata), tax_table(taxid_killed), phy_tree(killed_fitGTR$tree))
 
-#reload the phyloseq objects 
-```{r, eval = FALSE}
-
-killed = readRDS("~/Desktop/16s_script/killed")
 
 
 ```
 
 
+Save the files
+```{r save-physq-objects, eval = FALSE}
 
+saveRDS(ps_killed, file = "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed" )
+
+saveRDS(vst_killed, file = "~/landfill-microcosms/data/killed_microcosms_objects/vst_killed" )
+
+```

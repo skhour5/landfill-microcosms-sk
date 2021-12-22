@@ -119,6 +119,7 @@ Live samples: Create a path to the files being used
 ```{r fastq-file-path}
 
 all_live_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live")
+all_filt_path <- file.path("~/Desktop/Landfill_Project/16s_data/all_live_filt_from_github_repository/")
 
 ```
 
@@ -221,6 +222,8 @@ names(derep_all) <- sample.names
 
 #names(derep_all) <- sam.names_all
 
+
+
 ```
 > Here we use the high-resolution DADA2 method to infer ribosomal seq variats exactly, without imposing any arbitatry thershold (as is typical with OTUs) (Callahan et al., 2016)
 
@@ -229,11 +232,13 @@ names(derep_all) <- sample.names
 For learning errors, used code here because the one in the Callahan et al. paper didn't work, but this is by the same author:
 ```{r learn-errors, eval=FALSE}
 
+
+
 error_all = learnErrors(derep_all, multithread = TRUE) # by default the learnErrors function uses only a subset of the data (the first 100 M bases); can increase if desired. 
 
 #err_all = learnErrors(derep_all, multithread = TRUE, nbases = 1e9) 
 
-saveRDS(error_all, "../data/error_all")
+saveRDS(error_all, "../data/live_samples_objects/error_all")
 
 ```
 
@@ -255,6 +260,9 @@ plotErrors(error_all, nominalQ=TRUE)
 
 dada_all = dada(derep_all, err=error_all, pool=TRUE, multithread= TRUE)
 
+
+
+
 ```
 
 ### STEP 6: SEQ TABLE + REMOVE CHIMERAS
@@ -264,6 +272,8 @@ Live samples:Construct Sequence table + Remove Chimeras
 seqtab = makeSequenceTable(dada_all)
 
 nochim_seqtab.all <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+
+saveRDS(nochim_seqtab.all, "~/landfill-microcosms/data/live_samples_objects/nochim_seqtab.all")
 
 ```
 
@@ -387,73 +397,107 @@ The rownames of the seqtab should be identical to the rownames of the metadata, 
 
 
 ### Step 10: Variance stablilizing transformation
-This chunk of code is from Drmd's script
+
 ```{r make-count-tables, eval = FALSE}
 
-#Give our seq headers more manageable names (ASV_1, ASV_2...) and to write some tables. 
-asv_seqs <- colnames(nochim_seqtab.all)
-asv_headers <- vector(dim(nochim_seqtab.all)[2], mode="character")
 
-for (i in 1:dim(nochim_seqtab.all)[2]) {
-  asv_headers[i] <- paste(">ASV", i, sep="_")
-}
+# 
+# #Give our seq headers more manageable names (ASV_1, ASV_2...) and to write some tables. 
+# asv_seqs <- colnames(nochim_seqtab.all)
+# asv_headers <- vector(dim(nochim_seqtab.all)[2], mode="character")
+# 
+# for (i in 1:dim(nochim_seqtab.all)[2]) {
+#   asv_headers[i] <- paste(">ASV", i, sep="_")
+# }
+# 
+# # making and writing out a fasta of our final ASV seqs:
+# asv_fasta <- c(rbind(asv_headers, asv_seqs))
+# write(asv_fasta, "ASVs.fa")
+# asv_tab <- t(nochim_seqtab.all)  #transpose seq tab
+# row.names(asv_tab) <- sub(">", "", asv_headers)
+# write.table(asv_tab, "ASVs_counts.tsv", sep="\t", quote=F, col.names=NA)
+# # count_tab will hold the ASV and sample names
+# count_tab <- read.table("ASVs_counts.tsv", header=T, row.names=1,
+#                         check.names=F, sep="\t")
+# 
+# 
+# 
+# # creating table of taxonomy [and setting any that are unclassified as "NA"...]
+# write.table(taxid, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
+# # tax_tab will hold the ASVs and the taxa that go with them.
+# tax_tab <- as.matrix(read.table("ASVs_taxonomy.tsv", header=T,
+#                                 row.names=1, check.names=F, sep="\t"))
+# 
+# 
+# #check to see if these look reasonable. Note, if you have a lot of data, use 'head'
+# head(count_tab)
+# head(tax_tab)
+# #At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
+# #At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV. 
+# 
+# # If your count_tab does NOT have the sample names in the rows, then you need to fix that. 
+# #The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows).
+# #I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
+# 
+# count_tab_t <- t(count_tab)
+# tax_tab_t <- t(tax_tab)
+# 
+# #They should now both have the sample name.fastq on the rows in these version of the tables.
+# #It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
+# 
+# identical(rownames(count_tab_t), rownames(all_metadata)) #if this = TRUE, then you're good
 
-# making and writing out a fasta of our final ASV seqs:
-asv_fasta <- c(rbind(asv_headers, asv_seqs))
-write(asv_fasta, "ASVs.fa")
-asv_tab <- t(nochim_seqtab.all)  #transpose seq tab
-row.names(asv_tab) <- sub(">", "", asv_headers)
-write.table(asv_tab, "ASVs_counts.tsv", sep="\t", quote=F, col.names=NA)
-# count_tab will hold the ASV and sample names
-count_tab <- read.table("ASVs_counts.tsv", header=T, row.names=1,
-                        check.names=F, sep="\t")
+```
+
+```{r variance-stabilizing-transfromation, eval=FALSE, message = F}
+# 
+# design <- as.formula(~spike)
+# modelMartrix = model.matrix(design, data = all_metadata)
+# all_metadata$sample = factor(all_metadata$sample, 
+#                              levels = c("Antibiotics", "Fe(OH)3", "Control", "Na2SO4"))
+# modelMatrix = model.matrix(design, data= all_metadata)
+# 
+# 
+# deseq_counts <- DESeqDataSetFromMatrix(count_tab, colData = all_metadata, design = ~spike)
+# deseq_counts <- estimateSizeFactors(deseq_counts, type = "poscounts")
+# deseq_counts_vst <- varianceStabilizingTransformation(deseq_counts)
+# vst_trans_count_tab <- assay(deseq_counts_vst) # so this is a transformed table 
+# 
 
 
-
-# creating table of taxonomy [and setting any that are unclassified as "NA"...]
-write.table(taxid, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
-# tax_tab will hold the ASVs and the taxa that go with them.
-tax_tab <- as.matrix(read.table("ASVs_taxonomy.tsv", header=T,
-                                row.names=1, check.names=F, sep="\t"))
-
-
-#check to see if these look reasonable. Note, if you have a lot of data, use 'head'
-head(count_tab)
-head(tax_tab)
-#At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
-#At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV. 
-
-# If your count_tab does NOT have the sample names in the rows, then you need to fix that. 
-#The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows).
-#I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
-
-count_tab_t <- t(count_tab)
-tax_tab_t <- t(tax_tab)
-
-#They should now both have the sample name.fastq on the rows in these version of the tables.
-#It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
-
-identical(rownames(count_tab_t), rownames(all_metadata)) #if this = TRUE, then you're good
 
 ```
 
 
-```{r variance-stabilizing-transfromation, eval=FALSE, message = F}
+STEP 10- rewritten; 
+The whole changing the count table to have easier ASV names is totally unnecessary.. 
+Could skip the first two chunks and do just this one instead
+```{r try-another-way-to-do-transformation, eval = FALSE}
+
+nochim_seqtab.all <- readRDS("~/landfill-microcosms/data/live_samples_objects/nochim_seqtab.all")
+taxid <- readRDS("~/landfill-microcosms/data/live_samples_objects/taxid")
+
 
 design <- as.formula(~spike)
-modelMartrix = model.matrix(design, data = all_metadata)
+
+modelMartrix_killed <- model.matrix(design, data = all_metadata)
+
 all_metadata$sample = factor(all_metadata$sample, 
                              levels = c("Antibiotics", "Fe(OH)3", "Control", "Na2SO4"))
-modelMatrix = model.matrix(design, data= all_metadata)
 
+modelMatrix= model.matrix(design, data= all_metadata)
 
-deseq_counts <- DESeqDataSetFromMatrix(count_tab, colData = all_metadata, design = ~spike)
+nochim_seqtab.t <- t(nochim_seqtab.all)
+
+deseq_counts <- DESeqDataSetFromMatrix(nochim_seqtab.t, colData = all_metadata, design = ~spike) 
+
 deseq_counts <- estimateSizeFactors(deseq_counts, type = "poscounts")
+
 deseq_counts_vst <- varianceStabilizingTransformation(deseq_counts)
+
 vst_trans_count_tab <- assay(deseq_counts_vst) # so this is a transformed table 
 
-
-
+saveRDS(vst_trans_count_tab, "~/landfill-microcosms/data/live_samples_objects/vst_trans_count_tab")
 
 ```
 
@@ -477,7 +521,15 @@ identical(rownames(vst_trans_count_tab.t), rownames(all_metadata)) #should be tr
 
 ```{r make-variance-stablizing-trans-phyloseq-object, eval = FALSE}
 
-vst_all = phyloseq(vst_trans_count_tab, all_metadata, taxid, phy_tree(all_fitGTR$tree))
+nochim_seqtab.all <- readRDS("~/landfill-microcosms/data/live_samples_objects/nochim_seqtab.all")
+taxid <- readRDS("~/landfill-microcosms/data/live_samples_objects/taxid")
+all_fitGTR <- readRDS("~/landfill-microcosms/data/live_samples_objects/all_fitGTR")
+vst_trans_count_tab <-readRDS("~/landfill-microcosms/data/live_samples_objects/vst_trans_count_tab")
+
+vst_all <- phyloseq(otu_table(vst_trans_count_tab, taxa_are_rows = T),
+                    sample_data(all_metadata),
+                    tax_table(taxid),
+                    phy_tree(all_fitGTR$tree))
 
 ```
 
@@ -485,7 +537,11 @@ vst_all = phyloseq(vst_trans_count_tab, all_metadata, taxid, phy_tree(all_fitGTR
 (Continued from step 7, 8, 9 (no step 10)) might have to re-do some of these steps (line 744 subsetting the phyloseq object)
 ```{r make-untransformed-physeq-object, eval = FALSE}
 
-ps_all = phyloseq(otu_table(nochim_seqtab.all, taxa_are_rows = FALSE), sample_data(all_metadata), tax_table(taxid), phy_tree(all_fitGTR$tree))
+nochim_seqtab.all <- readRDS("~/landfill-microcosms/data/live_samples_objects/nochim_seqtab.all")
+taxid <- readRDS("~/landfill-microcosms/data/live_samples_objects/taxid")
+
+
+ps_all = phyloseq(otu_table(nochim_seqtab.all, taxa_are_rows = F), sample_data(all_metadata), tax_table(taxid), phy_tree(all_fitGTR$tree))
 
 ```
 
@@ -493,21 +549,10 @@ ps_all = phyloseq(otu_table(nochim_seqtab.all, taxa_are_rows = FALSE), sample_da
 #save phyloseq objects onto the desktop
 ```{r, eval = FALSE}
 
-saveRDS(vst_all, file = "../data/vst_all")
-saveRDS(ps_all, file = "../data/ps_all")
+saveRDS(vst_all, file = "../data/live_samples_objects/vst_all")
+saveRDS(ps_all, file = "../data/live_samples_objects/ps_all")
 
 ```
-
-
-#reload the phyloseq objects 
-```{r, eval = FALSE}
-
-all = readRDS("../data/vst_all")
-vst_all = readRDS("../data/all")
-
-
-```
-
 
 
 

@@ -8,23 +8,1116 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+  
 
-## R Markdown
+The input files for this part of the workflow are phyloseq objects such as those made in the `Making-phyloseq-objects` part of the workflow 
+```{r inputfiles}
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+ps_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all") # live samples 
+vst_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all") # live samples with transformed count table 
+ps_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed") #killed samples 
+vst_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed") #killed samples with transformed count table 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```
+  
+  
+  
+  
+  
+  
+  
+  
+  PART II. Evaluating data in phylseq objects (5 steps) (Handley workflow)
+    Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
+    Step 2) Detect outlier samples
+      Step 2.1) Remove outlier samples 
+      
+I haven't done steps 3-4 for the vst_all yet
+    Step 3) Taxon cleaning
+    Step 4) Prevalence assesment 
+    Step 5) Prevalence filtering [try filtering at 1%]
 
-```{r cars}
-summary(cars)
+#Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
+
+#Step 2) Detect outlier samples
+```{r}
+#format a data table to combine summary data with sample variable data 
+ss_all = sample_sums(all)
+sd_all = as.data.frame(sample_data(all))
+ss.dataf= merge(sd_all, data.frame("ASV" = ss_all), by="row.names")
+ss.dataf
+
+y= 1000 # set a thershold for th minimum number of acceptable reads, can start as a guess 
+x= "sample_time" # the x-axis variable you want to examine 
+label= "sample" 
+
+#plot the data by the treatment variable 
+ss_all_boxplot <- ggplot(ss.dataf, aes_string(x, y = "ASV", color = "spike")) + 
+  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  facet_wrap(~spike) +
+  geom_hline(yintercept = y, lty = 2) +
+  geom_text(aes_string(label = label), size = 3, nudge_y = 0.05, nudge_x = 0.05)
+ss_all_boxplot
+#it looks like AB-T4 is an outlier in therms of ASVs 
+
+
+#do the same for killed samples
+#format a data table to combine summary data with sample variable data 
+ss_killed = sample_sums(killed)
+sd_killed = as.data.frame(sample_data(killed))
+ss_killed_df=  merge(sd_killed, data.frame("ASV" = ss_killed), by="row.names")
+ss_killed_df
+
+y= 1000 # set a thershold for th minimum number of acceptable reads, can start as a guess 
+x= "sample_time" # the x-axis variable you want to examine 
+label= "sample" 
+
+#plot the data by the treatment variable 
+ss_killed_boxplot <- ggplot(ss_killed_df, aes_string(x, y = "ASV", color = "spike")) + 
+  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  facet_wrap(~spike) +
+  geom_hline(yintercept = y, lty = 2) +
+  geom_text(aes_string(label = label), size = 3, nudge_y = 0.05, nudge_x = 0.05)
+ss_killed_boxplot
+#it looks like NK4-T1 is an outlier here 
+
+```
+#Step 2.1) Remove outlier samples 
+Here it looks like NK5T1 and AB1T4 are outliers; maybe remove them? 
+```{r}
+nsamples(all)
+nsamples(killed)
+
+all <- all %>%
+  subset_samples(
+    bottle_number != "AB1t4")
+
+all #check that the sample was removed
+
+
+killed <- killed %>%
+  subset_samples(
+    bottle_number != "NK5t1")
+
+
+
+```
+#Step 3) Taxon cleaning
+There may be some taxa that shouldn't be included in analysis, e.g. "Chloroplast / Cyanobacteria"
+```{r}
+get_taxa_unique(all1, "Kingdom")
+get_taxa_unique(all1, "Phylum")
+get_taxa_unique(killed1, "Kingdom")
+get_taxa_unique(killed1, "Phylum")
+
+#decided not to remove anything because this is trash. 
+
+```
+#Step 4) Prevalence assesment 
+```{r}
+rank_names(all1)
+rank_names(killed1)
+
+#create a table for the number of features for each phyla
+
+table(tax_table(all1)[, "Phylum"], exclude = NULL)
+table(tax_table(killed1)[, "Phylum"], exclude = NULL)
+
+#compute prevalence of each feature + store as a data frome; defined as the number of samples in which taxa appears at least once
+prev_all = apply(X = otu_table(all1), MARGIN = ifelse(taxa_are_rows(all1), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+#add taxonomy and total read counts to this data frame
+prev_all =data.frame(Prevalence = prev_all, TotalAbundance = taxa_sums(all1), tax_table(all1)) 
+plyr::ddply(prev_all, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+
+
+prev_killed = apply(X = otu_table(killed1), MARGIN = ifelse(taxa_are_rows(killed1), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+prev_killed =data.frame(Prevalence = prev_killed, TotalAbundance = taxa_sums(killed1), tax_table(killed1)) 
+plyr::ddply(prev_killed, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+
+
+#Dashed horizontal line is drawn at 5% prevalence level
+#explore the relationship of prevalence and total read count for each feature 
+prev_all1 = subset(prev_all, Phylum %in% get_taxa_unique(all, "Phylum"))
+ggplot(prev_all1, aes(TotalAbundance, Prevalence / nsamples(all),color=Family)) +
+# Include a guess for parameter
+geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+scale_x_log10() + xlab("Total Abundance") + ylab("Prevalence [Frac of Live Samples]") +
+facet_wrap(~Phylum) + theme(legend.position="none")
+
+prev_killed1 = subset(prev_killed, Phylum %in% get_taxa_unique(killed, "Phylum"))
+ggplot(prev_killed1, aes(TotalAbundance, Prevalence / nsamples(killed),color=Family)) +
+# Include a guess for parameter
+geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+scale_x_log10() + xlab("Total Abundance") + ylab("Prevalence [Frac of Killed Samples]") +
+facet_wrap(~Phylum) + theme(legend.position="none")
+
+
+
+
+```
+#Step 5) Prevalence filtering [try filtering at 1%]
+```{r}
+nsamples(all1)
+prev_thres_all = 0.05 * nsamples(all1)
+prev_thres_all
+ntaxa(all1)
+
+keepTaxa_all <- rownames(prev_all)[(prev_all$Prevalence >= prev_thres_all)]
+ntaxa(all1)
+all2 = prune_taxa(keepTaxa_all, all1)
+ntaxa(all2) 
+
+
+#threshold of 1% only removed 2 taxa, maybe i should set the threshold higher
+#a 5% prevalence threshold took my taxa number from 1592 to 1566
+
+#now do the same for the killed samples
+
+prev_thres_k = 0.05*nsamples(killed1)
+keeptaxa_k = rownames(prev_killed)[(prev_all$Prevalence >=prev_thres_k)]
+ntaxa(killed1)
+killed2=prune_taxa(keeptaxa_k, killed1)
+ntaxa(killed2)
+#a 5% prevalence threshold took my taxa from 1396 to 1390. 
+
+
+
+
 ```
 
-## Including Plots
+### Repeating steps 1-2.1 for the vst_all phyloseq object
+Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
+```{r}
+## Create a new data frame of the sorted row sums, a column of sorted values from 1 to the total number
+#of individuals/counts for each ASV and a categorical variable stating these are all ASVs.
+readsumsdf_vst  <- data.frame(nreads = sort(taxa_sums(vst_all), decreasing = TRUE), 
+                         sorted = 1:ntaxa(vst_all),
+                         type = "ASVs")
 
-You can also embed plots, for example:
+view(readsumsdf_vst)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+sample_sum_df_vst <- data.frame(sum = sample_sums(vst_all))
+
+# Make plots
+# Generates a bar plot with # of reads (y-axis) for each taxa. Sorted from most to least abundant
+# Generates a second bar plot with # of reads (y-axis) per sample. Sorted from most to least
+p.reads_vst = ggplot(readsumsdf_vst, aes(x = sorted, y = nreads)) +
+  geom_bar(stat = "identity") +
+  ggtitle("ASV Assessment live samples") +
+  scale_y_log10() +
+  facet_wrap(~type, scales = "free") +
+  ylab("# of Sequences")
+p.reads_vst
+
+# Histogram of the number of Samples (y-axis) at various read depths
+p.reads.hist_vst <- ggplot(sample_sum_df_vst, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "green", binwidth = 150) +
+  ggtitle("Distribution of live sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples")
+p.reads.hist_vst
+
+# Final plot, side-by-side
+grid.arrange(p.reads, p.reads.hist, ncol = 2)
+
+# Basic summary statistics
+summary(sample_sums(vst_all))
+
+
+```
+Step 2) Detect outlier samples
+```{r}
+ss_all = sample_sums(all)
+sd_all = as.data.frame(sample_data(all))
+ss.dataf= merge(sd_all, data.frame("ASV" = ss_all), by="row.names")
+ss.dataf
+
+#format a data table to combine summary data with sample variable data 
+ss_all_vst = sample_sums(vst_all)
+sd_all_vst = as.data.frame(sample_data(vst_all))
+ss.dataf_vst= merge(sd_all_vst, data.frame("ASV" = ss_all_vst), by="row.names")
+ss.dataf_vst
+
+view(ss.dataf_vst)
+
+y= 1000 # set a thershold for th minimum number of acceptable reads, can start as a guess 
+x= "sample_time" # the x-axis variable you want to examine 
+label= "sample" 
+
+#plot the data by the treatment variable 
+ss_all_boxplot_vst <- ggplot(ss.dataf_vst, aes_string(x, y = "ASV", color = "spike")) + 
+  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  facet_wrap(~spike) +
+  geom_hline(yintercept = y, lty = 2) +
+  geom_text(aes_string(label = label), size = 3, nudge_y = 0.05, nudge_x = 0.05)
+ss_all_boxplot_vst
+
+#in this case it looks like ABt4 is above the threshold.. how did that happen????
+
+
+```
+There are no outliers this time. I really need to figure out how this mixing model ACTUALLY WORKS.
+
+
+
+
+#                          PART III: Let's make figures!   
+    --> using the variance stabilizing transformation (vst) phyloseq object from here on out [except for the diversity plots e.g. shannon, simpson, etc.]
+              
+    0.0]Re-arranging samples 
+    0.1]Assigning plot colors 
+    0.2] Transform data into relative counts
+A] Distance Measures; Ordination plots
+B] Alpha diveristy
+C] Taxa summaries
+  C-1] Boxplots 
+    0.4] make a dataframe from a phyloseq object.
+  C-1-1] Arrange boxplots in a grid together
+  C-2] Barcharts
+
+-----
+#0.0] Re-arrangle samples to put the control first
+```{r}
+
+#Take the phyloseq object apart and put it back together in the right order
+sample_data(vst_all)$spike
+control = subset_samples(vst_all, spike=="Control ")
+antibiotics = subset_samples(vst_all, spike =="Antibiotics")
+iron = subset_samples(vst_all, spike=="Fe(OH)3")
+sulfur = subset_samples(vst_all, spike =="Na2SO4")
+
+vst_all.ordered =merge_phyloseq(control, antibiotics, iron, sulfur)
+vst_all.1 = vst_all #preserving the old phyloseq object
+vst_all = vst_all.ordered
+
+sample_data(vst_all.ordered)$spike
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+#0.1] Assigning plot colors
+```{r}
+exper_colors= c("blue", "gray50", "firebrick1", "gold")
+exper_colors.ordered = c( "gray50", "blue", "firebrick1", "gold")
+
+```
+
+#0.2] Transform data into relative counts
+```{r}
+vst_all_rel_count = sweep(vst_trans_count_tab.abs, 1, rowSums(vst_trans_count_tab.abs), '/')
+
+#OR 
+
+vst_all_rel_1 = transform_sample_counts(vst_all, function(x) {x/sum(x)}) #from joey711/phyloseq issue #494
+
+```
+
+#A] Distance Measures; Ordination plots
+```{r}
+
+#NMDS + Bray curtis distances 
+
+nmds_bray_vst_all = ordinate(vst_all, method="NMDS", distance = "bray")
+
+nmds_bray_vst_all_plot = 
+  plot_ordination(vst_all, nmds_bray_vst_all, color = "spike", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5)
+nmds_bray_vst_all_plot #print the plot
+
+
+#PCoA + Unifrac 
+
+PCoA_wunifrac_vst_all = ordinate(vst_all, method="PCoA", distance = "wunifrac")
+
+PCoA_wunifrac_vst_all_plot = 
+  plot_ordination(vst_all , PCoA_wunifrac_vst_all, color = "spike", shape ="sample_time", title = "wUnifrac PCoA") +
+  geom_point(size=3.5) +
+  scale_color_manual(values= exper_colors)
+PCoA_wunifrac_vst_all_plot
+
+  
+#PCoA + Unifrac with the ordered phyloseq object
+PCoA_wunifrac_vst_all.ordered = ordinate(vst_all, method="PCoA", distance = "wunifrac")
+
+PCoA_wunifrac_vst_all_plot.ordered = 
+  plot_ordination(vst_all.ordered, PCoA_wunifrac_vst_all.ordered, color = "spike", shape ="sample_time", title = "wunifrac PCoA Ordered") +
+    scale_color_manual(values= exper_colors) +
+    geom_point(size=3.5)
+PCoA_wunifrac_vst_all_plot.ordered
+
+
+
+# so for some reason ordered in the phyloseq object with control first doesn't put the legend in order that the phyloseq object is, the only thing that happened is that the plot rotated 360 degrees.. I kinda like the ordered one better, it's easier to see somehow
+
+```
+#A-1] Create an ellipse around
+This part doesn't work because there are too few points
+```{r}
+
+PCoA_wunifrac_vst_all_plot.ordered + scale_color_manual(values= exper_colors) + geom_point(size=3.5) +
+stat_ellipse(type="norm", geom="polygon", alpha=1/10, aes (fills=sample_time))
+# too few points
+print(PCoA_wunifrac_vst_all.ordered +stat_ellipse())
+
+
+```
+
+
+#B] Alpha diversity 
+Used to identify within individual taxa richness and evenness
+The commonly used metrics/indices are Shannon, Inverse Simpson, Simpson, Gini, Observed and Chao1. These indices do not take into account the phylogeny of the taxa identified in sequencing. Phylogenetic diversity (Faith’s PD) uses phylogenetic distance to calculate the diversity of a given sample. (Sudarshan et al., 2020)
+
+
+One has to consider the sequencing depth (how much of the taxa have been sampled) for each sample. If there is a large difference, then it is important to normalize the samples to equal sampling depth. First, we look at the sampling depth (no. of reads per sample).
+```{r}
+library(microbiome) # data analysis and visualisation
+library(phyloseq) # also the basis of data object. Data analysis and visualisation
+library(RColorBrewer) # nice color options
+library(ggpubr) # publication quality figures, based on ggplot2
+library(DT) # interactive tables in html and markdown
+library(dplyr) # data handling  
+
+
+print(vst_all)
+
+summary(sample_sums(vst_all)) #number of reads per sample
+#there isn't a large difference between the min and max 
+#I'm going to look at the non vst phyloseq object 
+
+summary(sample_sums(all))
+#so obviously the vst trims down the number of reads significantly somehow. Again, I need to read the paper
+
+#we can plot the rarefaction curve for the observed ASVs in the entire dataset, this is a way to check how the richness captured in the sequencing effort 
+
+#otu_tab = t(abundances(vst_all)) 
+
+
+otu_tab = t(abundances(all))  #t = transpose I think, not sure why we transposed it
+
+#this step doesn't work with the vst_all, probably because of something abotu the way we transformed it
+
+
+#plot of species/reads
+#we're nto doing anything with this, but it's good to know
+p = vegan::rarecurve(otu_tab, 
+                      step = 50, label = FALSE, 
+                      sample = min(rowSums(otu_tab), 
+                                   col = "blue", cex = 0.6))
+
+#the tutorial I'm using here used this plot to rarify their data, however, we're not doing this here because susan holmes would be mad.
+
+```
+
+Non-phylogenetic diversities (non vst)
+```{r}
+#make sure you have the most up-to-date version of the microbiome package; use #BiocManager::install("microbiome") #update all
+#sometimes you have to unlaod and re-load the package for this step to work 
+#let's calculate diversity
+#this also doesn't work with vst_all
+#turns out it's not suppose to work with the variance stabilizing transformation, so just use the original phyloseq object
+div = alpha(all, index="all")  
+data.table(div)
+
+# get the metadata out as seprate object
+meta <- meta(all)
+
+# Add the rownames as a new colum for easy integration later.
+meta$sam_name <- rownames(meta)
+
+# Add the rownames to diversity table
+div$sam_name <- rownames(div)
+
+# merge these two data frames into one
+div.df <- merge(div, meta, by = "sam_name")
+
+# check the tables
+colnames(div)
+
+
+# Now use this data frame to plot 
+p_div <- ggboxplot(div.df, 
+               x = "spike", 
+               y = "diversity_shannon",
+              fill = "spike", 
+              palette = "jco")
+
+p_div <- p_div + rotate_x_text()
+
+print(p_div)
+
+
+
+#Seperate by both spike and time using metadata
+p_div_1 <- ggboxplot(div.df, 
+               x = "spike_time", 
+               y = "diversity_shannon",
+              fill = "sample_time")
+
+
+p_div_1 <- p_div_1 + rotate_x_text()
+
+print(p_div_1)
+
+#I need to re-order the samples so that ABT4 is 
+
+
+
+
+```
+
+
+shannon phylogenetic diversity w/re-ordered samples (non vst)
+```{r}
+#Seperate by both spike and time using metadata
+
+#order_of_samples = data.frame(name=c("ABT1", "ABT2", "ABT3", "ABT4" , "ABT5" ,"ABT6" ,"ABT1", "ABT2" ,
+ #                                    "ABT3","ABT5", "ABT6" ,"ABT1", "ABT2", "ABT3",
+  #                                   "ABT5", "ABT6" ,"FeT1","FeT2" ,"FeT3" ,"FeT4",
+   #                                  "FeT5" ,"FeT6" ,"FeT4", "FeT1" ,"FeT2" ,"FeT3" ,
+    #                               "FeT5" ,"FeT6", "FeT1" ,"FeT2" ,"FeT3", "FeT4" ,
+     #                                "FeT5", "FeT6" ,"NLT1", "NLT2", "NLT3", "NLT4",
+      #                               "NLT5", "NLT6" ,"NLT1", "NLT2" ,"NLT3" ,"NLT4",
+       #                              "NLT5" ,"NLT6", "NLT1", "NLT2" ,"NLT3", "NLT4" ,
+        #                             "NLT5" ,"NLT6" ,"ST1" , "ST2" , "ST3" , "ST4",
+         #                            "ST5" , "ST6" , "ST1" , "ST2" , "ST3" , "ST4" , 
+          #                           "ST5",  "ST6",  "ST1" , "ST2",  "ST3",  "ST4", 
+           #                          "ST5" , "ST6"))
+
+#ignore, but I'm keeping the order just in case!! 
+
+as.factor(div.df$spike_time)
+
+div.df$spike_time = factor(div.df$spike_time, levels = c("ABT1", "ABT2", "ABT3", "ABT4" , "ABT5" ,"ABT6", "FeT1","FeT2" ,"FeT3" ,"FeT4", "FeT5" ,"FeT6", "NLT1", "NLT2", "NLT3", "NLT4", "NLT5", "NLT6", "ST1" , "ST2",  "ST3",  "ST4", "ST5" , "ST6"))
+
+
+p_div_1 <- ggboxplot(div.df, 
+               x = "spike_time", 
+               y = "diversity_shannon",
+              fill = "sample_time")
+
+
+p_div_1 <- p_div_1 + rotate_x_text()
+
+print(p_div_1)
+
+#THAT WORKED, IT'S ORDERED NOW!! ONLY TOOK 1 HOUR TO FIGURE OUT. 
+
+
+```
+
+
+
+simpson boxplots (non vst)
+```{r}
+#spike time
+p_even <- ggboxplot(div.df, 
+               x = "spike_time", 
+               y = "evenness_simpson",
+              fill = "sample_time")
+
+
+p_even <- p_even + rotate_x_text()
+
+print(p_even)
+
+```
+
+
+
+Shannon and Simpson (vst)
+```{r}
+
+
+Shannon_plot = plot_richness(vst_all.ordered, x="spike_time", measures=c("Shannon"), color="spike")
+Shannon_plot + scale_color_manual(values= exper_colors) 
+
+
+
+
+
+Simpson_plot = plot_richness(vst_all, x="spike_time", measures=c("Simpson"), color="spike")
+Simpson_plot  + scale_color_manual(values= exper_colors)
+```
+
+
+Phylogenetic diversity using the Picante packate 
+https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/alpha-diversities.html#phylogenetic-diversity
+all of my diveristy measures were the same, I give up on this for now
+```{r, include=FALSE}
+
+library(picante)
+
+vst_all_asvtab = as.data.frame(vst_all@otu_table) #otu tab as a data frame
+view(vst_all_asvtab)
+
+vst_all_tree = vst_all@phy_tree #seperating the phylogenetic tree 
+
+
+# We first need to check if the tree is rooted or not 
+
+vst_all@phy_tree #unrooted tree 
+
+#df.pd <- pd(t(vst_all_asvtab), vst_all_tree, include.root=T) # t(ou_table) transposes the table for use in picante and the tre file comes from the first code chunck we used to read tree file 
+
+#need to root the tree, using joey711/phyloseq comment from Feb 28, 2018, issue #597 
+#https://github.com/joey711/phyloseq/issues/597
+
+pick_new_outgroup <- function(tree.unrooted){
+    require("magrittr")
+    require("data.table")
+    require("ape") # ape::Ntip
+    # tablify parts of tree that we need.
+    treeDT <- 
+      cbind(
+        data.table(tree.unrooted$edge),
+        data.table(length = tree.unrooted$edge.length)
+      )[1:Ntip(tree.unrooted)] %>% 
+      cbind(data.table(id = tree.unrooted$tip.label))
+    # Take the longest terminal branch as outgroup
+    new.outgroup <- treeDT[which.max(length)]$id
+    return(new.outgroup)
+}
+
+
+#It returns the string of the tip-label for the new proposed outgroup. It is then up to the user/process to take that result and do the next rooting step. This is a bit easier to test and maintain than also doing the rooting and opaquely returning the tree.
+
+new.outgroup = pick_new_outgroup(vst_all_tree)
+rootedTree= ape::root(vst_all_tree, outgroup=new.outgroup, resolve.root=TRUE)
+
+rootedTree_vst_all = rootedTree
+rootedTree_vst_all
+
+
+#try again to the the phylogentic diversity 
+
+#df.pd <- pd(t(vst_all_asvtab), rootedTree,include.root=T)
+## Error in UseMethod("is.rooted") : no applicable method for 'is.rooted' applied to an object of class "NULL"
+
+#okay I'll try to make my phyloseq object again with the rooted tree and then repeat 
+
+
+my_vst_physeqobj_rooted = phyloseq(seq_count_phy2, Metadata_tab_phy2, tax_tab_phy2, phy_tree(rootedTree))
+
+my_vst_physeqobj_full_time_rooted = subset_samples(my_vst_physeqobj_rooted, bottle!="NL1" &  bottle!="NL2"& bottle!="NL3")
+
+vst_all_rooted = my_vst_physeqobj_full_time_rooted #just renaming it to be a simplier name
+ vst_all@sam_data[["bottle"]] #just to check 
+ 
+vst_all_rooted_asvtab = as.data.frame(vst_all_rooted@otu_table)
+vst_all_rooted_tree = vst_all_rooted@phy_tree
+
+
+#df.pd = pd(vst_all_rooted_asvtab, vst_all_rooted_tree) #all i needed to do was NOT transpose the tree like they suggested. ugh.
+#datatable(df.pd) #why is pd all the same? 
+
+#let's try transposing first and then doing the df.pd
+vst_all_rooted_asvtab.t = t(vst_all_rooted_asvtab)
+
+df.pd = pd(vst_all_rooted_asvtab.t, vst_all_rooted_tree)
+
+vst_all_rooted_asvtab.t
+
+
+# get the metadata out as seprate object
+vst_meta <- meta(vst_all_rooted)
+
+
+vst_meta$Phylogenetic_Diversity = df.pd$PD #added the phylogenetic diversity results to the vst_metadata
+
+view(vst_meta)
+
+
+
+
+
+```
+
+
+
+
+
+
+#0.3]taxa glom
+```{r}
+#summes all ASVs that were in the same level
+
+#Glom at famiily level 
+vst_all_rel_glom = tax_glom(vst_all_rel_1, taxrank = "Family")
+vst_all_rel_glom_family = vst_all_rel_glom
+
+#Glom at phylum level 
+vst_all_rel_glom_phylum = tax_glom(vst_all_rel_1, taxrank= "Phylum")
+
+
+
+```
+
+
+#C-1] Boxplots 
+```{r}
+
+#Phylum level box plot 
+
+vst_all_rel_glom2 = tax_glom(vst_all_rel_1, taxrank = "Phylum")
+
+dat_vst_all_rel2 = data.table(psmelt(vst_all_rel_glom2))
+dat_vst_all_rel2$Phylum <- as.character(dat_vst_all_rel2$Phylum)
+dat_vst_all_rel2$Order = as.character(dat_vst_all_rel2$Order)
+dat_vst_all_rel2$Family = as.character(dat_vst_all_rel2$Family)
+
+# group dataframe by Family, calculate median rel. abundance
+dat_vst_all_rel2[, median := median(Abundance, na.rm = TRUE), 
+    by = "Phylum"]
+# Change name to remainder of Family less than .1%
+dat_vst_all_rel2[(median <= 0.001), Phylum := " Other < .1%"]
+
+
+boxplot_Phylum = ggplot(dat_vst_all_rel2[Abundance > 0],
+       aes(x=Phylum,
+           y=Abundance)) + 
+  geom_boxplot() + 
+  coord_flip() +
+  scale_y_log10()+ labs(title="Phylum")
+boxplot_Phylum
+
+
+#Family level box plot
+
+vst_all_rel_glom = tax_glom(vst_all_rel_1, taxrank = "Family")
+
+dat_vst_all_rel = data.table(psmelt(vst_all_rel_glom))
+dat_vst_all_rel$Phylum <- as.character(dat_vst_all_rel$Phylum)
+dat_vst_all_rel$Order = as.character(dat_vst_all_rel$Order)
+dat_vst_all_rel$Family = as.character(dat_vst_all_rel$Family)
+
+# group dataframe by Family, calculate median rel. abundance
+dat_vst_all_rel[, median := median(Abundance, na.rm = TRUE), 
+    by = "Family"]
+# Change name to remainder of Family less than 5%
+dat_vst_all_rel[(median <= 0.01), Family := " Other < 1%"]
+
+
+boxplot_Family = ggplot(dat_vst_all_rel[Abundance > 0],
+       aes(x=Family,
+           y=Abundance)) + 
+  geom_boxplot() + 
+  coord_flip() +
+  scale_y_log10()+ labs(title="Family")
+boxplot_Family
+
+
+
+#genus level boxplot
+vst_all_rel_glom_genus = tax_glom(vst_all_rel_1, taxrank = "Genus")
+
+dat_vst_all_rel_genus = data.table(psmelt(vst_all_rel_glom_genus)) #make a data table with the agg taxa at genus level 
+dat_vst_all_rel_genus$Phylum <- as.character(dat_vst_all_rel_genus$Phylum)
+dat_vst_all_rel_genus$Order = as.character(dat_vst_all_rel_genus$Order)
+dat_vst_all_rel_genus$Family = as.character(dat_vst_all_rel_genus$Family)
+dat_vst_all_rel_genus$Genus = as.character(dat_vst_all_rel_genus$Genus)
+
+
+
+# group dataframe by Genus, calculate median rel. abundance
+dat_vst_all_rel_genus[, median := median(Abundance, na.rm = TRUE), 
+    by = "Genus"]
+# Change name to remainder of Family less than 1%
+dat_vst_all_rel_genus[(median <= 0.01), Genus := " Other < 1%"]
+
+
+boxplot_genus = ggplot(dat_vst_all_rel_genus[Abundance > 0],
+       aes(x=Genus,
+           y=Abundance)) + 
+  geom_boxplot() + 
+  coord_flip() +
+  scale_y_log10()+ labs(title="Genus")
+boxplot_genus
+
+
+```
+
+#C-1-1] Arrange boxplots in a grid together
+```{r}
+ggarrange(boxplot_Phylum, boxplot_Family, nrow=1)
+boxplot_genus
+
+```
+
+#0.4] Make a dataframe from a phyloseq object
+```{r}
+
+dat_family = data.table(psmelt(vst_all_rel_glom_family))
+# convert Phylum to a character vector from a factor because R
+dat_family$Phylum <- as.character(dat$Phylum)
+dat_family$Order = as.character(dat$Order)
+dat_family$Family = as.character(dat$Family)
+
+# group dataframe by Family, calculate median rel. abundance
+dat_family[, median := median(Abundance, na.rm = TRUE), 
+    by = "Family"]
+# Change name to remainder of Family less than 1%
+dat_family[(median <= 0.01), Family := " Other < 1%"]
+```
+
+
+#C-2] Barcharts 
+phylum
+```{r}
+
+# Create a data table for ggplot
+vst_all_phylum <- vst_all %>%
+  tax_glom(taxrank = "Phylum") %>%                     # agglomerate at phylum level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance (or use ps0.ra)
+  psmelt() %>%                                         # Melt to long format for easy ggploting
+  filter(Abundance > 0.01)                             # Filter out low abundance taxa
+
+# Plot - Phylum
+p.ra.phylum <- ggplot(vst_all_phylum, aes(x = spike_time, y = Abundance, fill = Phylum)) + 
+  geom_bar(stat = "identity", width = 1) +
+  facet_wrap(spike~spike_time, scales = "free_x", nrow = 4, ncol = 7) +
+  theme(axis.text.x = element_blank()) +
+  theme(axis.title.x = element_blank()) +
+  labs(title = "Abundant Phylum (> 1%)")
+p.ra.phylum
+
+
+# Create a data table for ggplot
+vst_all_phylum <- vst_all %>%
+  tax_glom(taxrank = "Phylum") %>%                     # agglomerate at phylum level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance (or use ps0.ra)
+  psmelt() %>%                                         # Melt to long format for easy ggploting
+  filter(Abundance > 0.01)                             # Filter out low abundance taxa
+
+# Plot - Phylum
+p.ra.phylum <- ggplot(vst_all_phylum, aes(x = sample_time, y = Abundance, fill = Phylum)) + 
+  geom_bar(stat = "identity", width = 1) +
+  labs(title = "Abundant Phylum (> 1%)")
+p.ra.phylum
+
+mean(vst_all_phylum$Abundance~sample_time)
+
+abundance_by_time = vst_all_phylum %>% group_by(sample_time)
+levels(abundance_by_time$sample_time)
+as.factor(abundance_by_time$sample_time)
+
+rel_abundance_T1 = vst_all_phylum %>% subset(sample_time == "T1")
+
+
+
+
+```
+Genus
+```{r}
+# Create a data table for ggplot
+vst_all_genus <- vst_all %>%
+  tax_glom(taxrank = "Genus") %>%                     # agglomerate at phylum level
+  psmelt()                                        # Melt to long format for easy ggploting
+     
+  
+vst_all_genus_rel <- vst_all %>%
+  tax_glom(taxrank="Genus") %>%
+  transform_sample_counts(function(x) {x/sum(x)}) %>% # Transform to rel
+  psmelt()
+                                        
+  
+vst_all_genus$relative_abundance = vst_all_genus_rel$Abundance
+
+vst_all_genus_filt = vst_all_genus %>%filter(relative_abundance>0.01)
+vst_all_genus_filt_5 = vst_all_genus %>%filter(relative_abundance>0.05)
+
+
+
+# Plot - Genus
+p.ra.genus <- ggplot(vst_all_genus_filt_5, aes(x = sample_time, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(color=Genus, fill=Genus), stat = "identity", width = 1) +
+  labs(title = "Abundant Genus ( >5 %)", x = "Sample Time")
+p.ra.genus
+
+
+# Plot - Genus
+p.ra.genus_2 <- ggplot(vst_all_genus_filt_5, aes(x = spike, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(color=Genus, fill=Genus), stat = "identity", width = 1) +
+  labs(title = "Abundant Genus (>5 %)", x="Spike")
+p.ra.genus_2
+
+#plot genus 
+
+p.ra.genus_3 <- ggplot(vst_all_genus_filt, aes(x = bottle , y = relative_abundance, fill = Genus)) +
+  geom_bar(aes(color=Genus, fill=Genus), stat = "identity", width = 1) +
+  labs(title = "Abundant Genus (>1 %)", x="Spike")+
+  facet_wrap(sample_time~spike, scales="free_x", nrow=4)
+p.ra.genus_3
+
+
+```
+
+
+
+#              Part IIII: Significance Testing and Other statistics 
+
+0.I] subsetting data in phyloseq object  
+I. ADONIS (Handley workflow)
+II. Differential Abundance testing (DESEQ2) # Hasn't quite worked yet Need to read the DESEQ2 paper and workflow maybe?
+III. Random Forest Modelling
+
+Links to other methods to detect differentially abundant taxa:
+
+Random Forest in R example: https://rpubs.com/michberr/randomforestmicrobe
+LEfSe: https://bitbucket.org/biobakery/biobakery/wiki/lefse
+ANCOM: https://www.ncbi.nlm.nih.gov/pubmed/26028277
+
+
+----
+#0.I] Subsetting data
+```{r}
+#Make a phyloseq object with just the post-spike time points
+sample_data(vst_all)$sample_time #check what the levels look like
+postspike_vst_all = subset_samples(vst_all, sample_time!="T1" & sample_time!="T2" & sample_time!="T3" & sample_time!="T4") #exclude anything before the spikes were added
+sample_data(postspike_vst_all)$sample_time #check again 
+
+
+#Make a phyloseq object with just the pre-spike time points
+sample_data(vst_all)$sample_time #check what the levels look like
+prespike_vst_all = subset_samples(vst_all, sample_time!="T5" & sample_time!="T6")
+sample_data(prespike_vst_all)$sample_time #check again
+
+
+#Make objects with just control and treament group
+sample_data(vst_all)$spike
+
+control_antibiotics = subset_samples(vst_all, spike!="Fe(OH)3" & spike!="Na2SO4")
+sample_data(control_antibiotics)$spike
+
+control_iron = subset_samples(vst_all, spike!="Antibiotics" & spike!="Na2SO4")
+sample_data(control_iron)$spike
+
+control_sulfate = subset_samples(vst_all, spike!="Fe(OH)3" & spike!="Antibiotics")
+sample_data(control_sulfate)$spike
+
+```
+
+
+#I. Group Signifcance Testing with ADONIS (from handely workflow) (done)
+another way:
+https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/beta-diversity-metrics.html#phylogenetic-beta-diversity-metrics
+
+
+paper source:
+https://onlinelibrary.wiley.com/doi/10.1002/9781118445112.stat07841
+
+```{r}
+#Set a random seed so that exact results can be reproduced
+#I honestly don't know what that means. 
+set.seed(10000)
+
+
+#function to run ADONIS test on a phyloseq object and a variable from metadata 
+doadonis <- function(physeq, category) {
+  bdist <- phyloseq::distance(physeq, "wunifrac")
+  col <- as(sample_data(physeq), "data.frame")[ ,category]
+  # Adonis test
+  adonis.bdist <- adonis(bdist ~ col, permutations = 10000) 
+  #the great number of permuations gives greater precision, but also takes longer to run, although this didn't take that long
+  print("Adonis results:")
+  print(adonis.bdist)}
+
+
+all_timepoints_adonis = doadonis(vst_all, "spike") #Results are significant, though I'm not sure which groups are different from each other. 
+
+all_timepoints_adonis$aov.tab$'Pr(>F)'[1] #this gives you the p value of the adonis test 
+#same thing but in another way; double bracket notation; 
+all_timepoints_adonis[["aov.tab"]][["Pr(>F)"]][1]
+
+
+#control v. antibiotics
+control_antibiotics_adonis = doadonis(control_antibiotics, "spike") #sig
+
+#control v. iron 
+control_iron_adonis = doadonis(control_iron, "spike") #sig
+
+#control v. sulfate
+control_sulfate_adonis = doadonis(control_sulfate, "spike") #sig
+
+
+##adonis of samples only pre-spike 
+pre_spike_adonis = doadonis(prespike_vst_all, "spike") #significant
+
+##adonis of samples only post-spike 
+post_spike_adonis = doadonis(postspike_vst_all, "spike") #significant 
+
+
+#it seems like the experiments were different even before the spikes
+
+
+```
+
+#I-1. Checking the homogeneity condition? (not yet)
+https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/beta-diversity-metrics.html#permanova
+
+```{r}
+
+
+
+
+```
+
+
+
+
+#II. Differential Abundance Testing [[This didn't work yet]]
+DESEQ2
+Since the example data set collected time-series data we can take advantage of the likelihood ration test (LRT) model of DESeq2. The LRT will identify ASV differentially abundant between groups at one or more time point.
+Determine all taxa differentially abundant between treatment groups at at least one time point
+```{r}
+
+# Test for taxa which at one or more time points after time 0 showed a treatment-specific effect
+# Convert phyloseq object to DESeq2 table
+ds_control_antibiotics_LRT <- phyloseq_to_deseq2(control_antibiotics, ~spike + sample_time + spike:sample_time)
+
+# Run DESeq2
+dds_control_antibiotics_LRT <- DESeq(ds_control_antibiotics_LRT, test="LRT", reduced = ~spike + sample_time)
+
+
+
+# Tabulate results
+res.dds.vehicle_metro.LRT <- results(dds.vehicle_metro.LRT)
+res.dds.vehicle_metro.LRT$symbol <- mcols(dds.vehicle_metro.LRT)$symbol
+summary(res.dds.vehicle_metro.LRT)
+mcols(res.dds.vehicle_metro.LRT)
+write.table(res.dds.vehicle_metro.LRT, file = "../results/deseq_vehicle_v_metro_LRT.txt", sep = "\t")
+
+nrow(res.dds.vehicle_metro.LRT)
+df.res <- as.data.frame(res.dds.vehicle_metro.LRT[ which(res.dds.vehicle_metro.LRT$padj < 0.05), ])
+nrow(df.res)
+df.res <- rownames_to_column(df.res, var = "ASV")
+write.table(df.res, file = "../results/df_deseq2_results.txt", sep = "\t")
+
+# Create appropriately formatted taxa table
+# RDP
+tax.table <- as.tibble(as.data.frame(tax_table(ps2)))
+tax.table <- rownames_to_column(tax.table, var = "ASV")
+df.rdp <- left_join(df.res, tax.table, by = "ASV")
+colnames(df.rdp)
+
+ggplot(df.rdp, aes(x = Phylum, y = log2FoldChange, color = Family)) +
+  geom_jitter(size = 3, alpha = 0.7, width = 0.1) +
+  geom_hline(yintercept = 0, lty = 2) +
+  ylim(-35, 35)
+
+
+
+
+dds = DEseq(dds)
+
+
+
+
+
+```
+
+
+
+
+
+#III. Random Forest Modelling
+https://rpubs.com/michberr/randomforestmicrobe
+```{r}
+
+#need to do some basic reformatting and filtering 
+colnames(tax_table(vst_all))
+
+# Filter out, chloroplasts and mitochondria k
+vst_all %>%
+  subset_taxa( Family != "mitochondria" & 
+              Class != "Chloroplast") -> vst_all 
+
+vst_all
+
+
+
+
+
+```
+
+
+
+#Core Microbiotaanalysis
+https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/core-microbiota.html
+
+```{r}
+
+vst_all_rel_1 = transform_sample_counts(vst_all, function(x) {x/sum(x)}) #from joey711/phyloseq issue #494
+
+print(vst_all_rel_1)
+
+vst_all_rel_pruned = prune_taxa(taxa_sums(vst_all_rel_1)>0, vst_all_rel_1)
+
+print(vst_all_pruned) #nothing changed so not sure why we did this step 
+
+core.taxa.standard = core_members(vst_all_rel_pruned, detection = 0.001)
+
+print(core.taxa.standard)
+
+taxonomy_rel = as.data.frame(tax_table(vst_all_rel_1))
+
+#subset taxomony to include only core OTUs
+
+core_taxa_id = subset(taxonomy_rel, rownames(taxonomy_rel) %in% core.taxa.standard) #these are the core taxa that we've identified
+
+
+#next we'll do the sum of the abundances of the core members in each sample
+
+core.abundance <- sample_sums(core(vst_all_rel_1, detection = 0.001, prevalence = 50/100))
+
+
+new = prune_taxa(core_taxa_id, vst_all_rel_1)
+
+
+
+```
+
+
+
+#Advanced Models for differential abudnance
+https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/advanced-models-for-differential-abundance.html
+
+```{r}
+
+```
+
+
+
+#Trying to create a count tab with meaningful rownames
+incomplete, ignore
+```{r}
+
+taxonomy = as.data.frame(tax_table(vst_all)) #extracting the taxatable from vst_all phyloseq object 
+
+counts_all = as.data.frame(otu_table(vst_all)) #extracting the otu table 
+counts_all.t = t(counts_all) #transposing the otutable
+
+taxonomy$taxalabel = paste(new_taxanames$Family, new_taxanames$Genus) #adding a column with the Family and Genus name in one label 
+replace(taxonomy$taxalabel, taxonomy$taxalabel=="NA NA", "Other") #placing the "NA NA" data with "other"
+
+taxonomy$taxalabel2 = paste(new_taxanames$Order, new_taxanames$Family) 
+
+replace(taxonomy$taxalabel2, taxonomy$taxalabel2=="NA NA", "Other")
+
+identical(rownames(counts_all.t), rownames(taxonomy))#are the rownames identifical?
+#TRUE
+
+rownames(taxonomy) = taxonomy$taxalabel2
+
+summary(vst_all)
+
+
+
+
+```
+

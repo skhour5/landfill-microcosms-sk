@@ -19,28 +19,27 @@ ps_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_kil
 vst_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed") #killed samples with transformed count table 
 
 ```
-  
-  
-  
-  
-  
-  
-  
-  
-  PART II. Evaluating data in phylseq objects (5 steps) (Handley workflow)
-    Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
-    Step 2) Detect outlier samples
-      Step 2.1) Remove outlier samples 
-      
-I haven't done steps 3-4 for the vst_all yet
-    Step 3) Taxon cleaning
-    Step 4) Prevalence assesment 
-    Step 5) Prevalence filtering [try filtering at 1%]
+Make sure all of the files in the global environment are listed as "Large Phyloseq" (~2 MB or larger), if not, then your file didn't save correctly in the previous workflow, go back and re-save it then re-load here. 
+It's possible that your file size will be smaller if you have fewer samples, but the most important thing is that when you open the object, you get the following:
+```{r check-phyloseq-object}
+ps_all
+```
+You should get a `phyloseq-class experiment-level object` with an `otu-table`, `sample_data`, `tax_table`, and `phy_tree()` (if a phylogentic tree was added)
+
+
+ PART II. Evaluating data in phylseq objects (5 steps) (Handley workflow)
+* Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
+* Step 2) Detect outlier samples
+ + Step 2.1) Remove outlier samples 
+* Step 3) Taxon cleaning
+* Step 4) Prevalence assesment 
+*  Step 5) Prevalence filtering [try filtering at 1%]
 
 #Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
 
 #Step 2) Detect outlier samples
 ```{r}
+
 #format a data table to combine summary data with sample variable data 
 ss_all = sample_sums(all)
 sd_all = as.data.frame(sample_data(all))

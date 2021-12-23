@@ -5,26 +5,358 @@ date: "12/23/2021"
 output: html_document
 ---
 
+This workflow is based on the 2018_ASM_Workshop by Scott A. Handley
+
+Here is the forked repository: https://github.com/jud-m/2018_ASM_Workshop. 
+
+In this workflow we will assess the data in our phyloseq objects and make sure it is ready for downstream visualization and statistics. 
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+### Load packages
+```{r load-packages, message=FALSE, warning=FALSE}
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+library(ggplot2)
+library(gridExtra)
+library(phyloseq)
+require("tidyverse")
+library("dplyr")
+library("rmarkdown")
+library("vegan")
+library("PoiClaClu")
+library("doParallel")
+library("plotly")
+library("microbiome")
+library("ggpubr")
+library("viridis")
+library("plyr")
+library("magrittr")
+library("scales")
+#library("data.table")
+#library(grid)
+#library(reshape2)
+#library(randomForest)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+## Load the input files
+
+The input files for this part of the workflow are phyloseq objects such as those made in the `Making-phyloseq-objects` part of the workflow 
+```{r inputfiles}
+
+ps_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all") # live samples 
+vst_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all") # live samples with transformed count table 
+ps_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed") #killed samples 
+vst_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed") #killed samples with transformed count table 
+
+```
+Make sure all of the files in the global environment are listed as "Large Phyloseq" (~2 MB or larger), if not, then your file didn't save correctly in the previous workflow, go back and re-save it then re-load here. 
+It's possible that your file size will be smaller if you have fewer samples, but the most important thing is that when you open the object, you get the following:
+```{r check-phyloseq-object}
+ps_all
+```
+You should get a `phyloseq-class experiment-level object` with an `otu-table`, `sample_data`, `tax_table`, and `phy_tree()` (if a phylogentic tree was added)
+
+
+
+
+## Factor re-ordering 
+
+Here we have 4 groups; a control and four treatments (antibiotics, Fe(OH)3), and NA2SO4). 
+R generally lists characters in alphabetical order, so any plot we make will list antibiotics first. We probably want the control listed first instead.
+```{r}
+#ps_all 
+as.factor(sample_data(ps_all)$spike) #check the names of the levels
+sample_data(ps_all)$spike <- factor(sample_data(ps_all)$spike, levels = c("Control ", "Antibiotics", "Fe(OH)3", "Na2SO4")) #ran into an issue because "Control " had a space at the end of it; R is senstive to spaces
+levels(sample_data(ps_all)$spike) #check that your levels are in the order you want
+sample_data(ps_all)$spike <- factor(sample_data(ps_all)$spike, labels = c("Control", "Antibiotics", "Fe(OH)3", "Na2SO4")) #remove the space
+levels(sample_data(ps_all)$spike)
+
+#repeat for all phyloseq objects
+
+#vst_all
+as.factor(sample_data(vst_all)$spike)
+sample_data(vst_all)$spike <- factor(sample_data(ps_all)$spike, levels = c("Control ", "Antibiotics", "Fe(OH)3", "Na2SO4"))
+sample_data(vst_all)$spike <- factor(sample_data(ps_all)$spike, labels = c("Control", "Antibiotics", "Fe(OH)3", "Na2SO4")) #remove the space
+levels(sample_data(vst_all)$spike)
+
+#ps_killed
+as.factor(sample_data(ps_killed)$spike)
+sample_data(ps_killed)$spike <- factor(sample_data(ps_killed)$spike, levels = c("killed_control", "Antibiotics","Fe(OH)3", "Na2SO4"))
+levels(sample_data(ps_killed)$spike)
+#killed control is a clunky name, might want to change that to just control.. but will I want to merge the phyloseq objects at some point? Might be good to have a way to differentiate them?? That's gonna be true for all of the levels though. So I'm just gonna change it to control and find another way to differentiate later 
+sample_data(ps_killed)$spike <- factor(sample_data(ps_killed)$spike, labels = c("Control", "Antibiotics","Fe(OH)3", "Na2SO4"))
+
+#vst_killed
+as.factor(sample_data(ps_killed)$spike)
+sample_data(ps_killed)$spike <- factor(sample_data(ps_killed)$spike, levels = c("killed_control", "Antibiotics","Fe(OH)3", "Na2SO4"))
+levels(sample_data(ps_killed)$spike)
+
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+There are several possible ways to evaluate the data, but a standard approach consists of the following
+
+* Step 1) Evaluate Amplicon Sequence Variants (ASV) summary statistics
+* Step 2) Detect & remove outlier samples
+* Step 3) Taxon cleaning
+* Step 4) Prevalence assesment & filtering
+
+
+## Step 1) Evaluate Amplicon Sequence Variants (ASVs)
+
+This part is only really relevant for the non-transformed phyloseq objects. The variance stabilizing transformation somehow re-combines the data so the ASVs in each sample are no longer accurate 
+
+This chunk makes a data frame with 3 variables to count the number of ASVs in descreasing order
+```{r make-df-of-ASV-sums}
+
+readsumsdf.all <- data.frame(nreads = sort (taxa_sums(ps_all), decreasing = TRUE), # Create a new data frame of the sorted row sums,
+                         sorted = 1:ntaxa(ps_all ), #a column of sorted values from 1 to the total number of individuals/counts for each ASV 
+                        type = "ASVs" #a categorical variable stating these are all ASVs.
+                         )
+
+readsumsdf.killed <- data.frame(nreads = sort (taxa_sums(ps_killed), decreasing = TRUE), # Create a new data frame of the sorted row sums,
+                         sorted = 1:ntaxa(ps_killed), #a column of sorted values from 1 to the total number of individuals/counts for each ASV 
+                        type = "ASVs" #a categorical variable stating these are all ASVs.
+                         )
+
+```
+
+
+```{r make-sample-sum-df}
+
+# Make a data frame with a column for the read counts of each sample for histogram production
+sample_sum_df.all <- data.frame(sum = sample_sums(ps_all))
+
+sample_sum_df.killed <- data.frame (sum = sample_sums(ps_killed))
+
+```
+
+```{r number-seq-per-taxa}
+
+# Generates a second bar plot with # of reads (y-axis) per sample. Sorted from most to least
+
+ggplot(readsumsdf.all, aes(x = sorted, y = nreads)) +
+  geom_bar(stat = "identity") +
+  ggtitle("ASV Assessment") +
+  scale_y_log10() +
+  facet_wrap(~type, scales = "free") +
+  ylab("# of Sequences")
+  
+ggplot(readsumsdf.killed, aes(x = sorted, y = nreads)) +
+  geom_bar(stat = "identity") +
+  ggtitle("ASV Assessment") +
+  scale_y_log10() +
+  facet_wrap(~type, scales = "free") +
+  ylab("# of Sequences")
+
+
+```
+```{r histogram}
+
+# Histogram of the number of Samples (y-axis) at various read depths
+
+ggplot(sample_sum_df.all, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "firebrick3", binwidth = 150) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples")
+
+ggplot(sample_sum_df.killed, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "firebrick3", binwidth = 150) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("# of Samples")
+
+
+
+
+```
+
+
+```{r summary-stats-no-reads}
+
+summary(sample_sums(ps_all)) 
+
+summary(sample_sums(ps_killed)) 
+
+```
+
+The above data assessment is useful for getting an idea of 
+
+1) the number of sequences per taxa. This will normally be a "long tail" with some taxa being highly abundant in the data tapering off to taxa with very few reads,
+
+2) the number of reads per sample. 
+
+Very low read count can be indicative of a failed reaction. 
+
+Both of these plots will help give an understanding of how your data are structured across taxa and samples and will vary depending on the nature of your samples.
+
+
+
+
+#Step 2) Detect outlier samples
+```{r outlier-id-live}
+
+#format a data table to combine summary data with sample variable data 
+ss_all = sample_sums(ps_all)
+
+sd_all = as.data.frame(sample_data(ps_all))
+
+ss.dataf= merge(sd_all, data.frame("ASV" = ss_all), by="row.names")
+ss.dataf
+
+y= 1000 # set a thershold for th minimum number of acceptable reads, can start as a guess 
+x= "sample_time" # the x-axis variable you want to examine 
+label= "sample" 
+
+#plot the data by the treatment variable 
+ss_all_boxplot <- ggplot(ss.dataf, aes_string(x, y = "ASV", color = "spike")) + 
+  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  facet_wrap(~spike) +
+  geom_hline(yintercept = y, lty = 2) +
+  geom_text(aes_string(label = label), size = 3, nudge_y = 0.05, nudge_x = 0.05)
+ss_all_boxplot
+#it looks like AB-T4 is an outlier in therms of ASVs 
+
+
+```
+
+```{r outlier-id-killed}
+
+#do the same for killed samples
+#format a data table to combine summary data with sample variable data 
+ss_killed = sample_sums(ps_killed)
+sd_killed = as.data.frame(sample_data(ps_killed))
+ss_killed_df=  merge(sd_killed, data.frame("ASV" = ss_killed), by="row.names")
+ss_killed_df   
+
+y= 1000 # set a thershold for th minimum number of acceptable reads, can start as a guess 
+x= "sample_time" # the x-axis variable you want to examine 
+label= "sample" 
+
+#plot the data by the treatment variable 
+
+ss_killed_boxplot <- ggplot(ss_killed_df, aes_string(x, y = "ASV", color = "spike")) + 
+  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  facet_wrap(~spike) +
+  geom_hline(yintercept = y, lty = 2) +
+  geom_text(aes_string(label = label), size = 3, nudge_y = 0.05, nudge_x = 0.05)
+ss_killed_boxplot
+#it looks like NK4-T1 is an outlier here 
+
+```
+The example data does have several samples with fewer than 1,000 ASV. 
+
+When questionable samples arise you should take note of them so if there are samples which behave oddly in downstream analysis you can recall this information and perhaps justify their removal. In this case lets remove them for practice. 
+
+Here it looks like NK5T1 and AB1T4 are outliers; maybe remove them? 
+```{r}
+
+# nsamples(ps_all) #check how many samples are present
+# nsamples(ps_killed)
+# 
+# ps_all <- ps_all %>%
+#   subset_samples(
+#     bottle_number != "AB1t4")
+# 
+# nsamples(ps_all) #check that the sample was removed
+# 
+# 
+# ps_killed <- ps_killed %>%
+#   subset_samples(
+#     bottle_number != "NK5t1")
+# 
+# 
+
+```
+
+
+#Step 3) Taxon cleaning
+There may be some taxa that shouldn't be included in analysis, e.g. "Chloroplast / Cyanobacteria"
+
+
+```{r check-unique-taxa}
+
+get_taxa_unique(ps_all, "domain")
+get_taxa_unique(ps_all, "phylum")
+
+get_taxa_unique(ps_killed, "domain")
+get_taxa_unique(ps_killed, "phylum")
+
+```
+
+
+#Step 4) Prevalence assesment 
+```{r}
+
+#create a table for the number of features for each phyla
+
+table(tax_table(ps_all)[, "phylum"], exclude = NULL)
+
+#compute prevalence of each feature + store as a data frome; defined as the number of samples in which taxa appears at least once
+prev_all <- apply(X = otu_table(ps_all), MARGIN = ifelse(taxa_are_rows(ps_all), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+
+#add taxonomy and total read counts to this data frame
+prev_all  <- data.frame(Prevalence = prev_all, TotalAbundance = taxa_sums(ps_all), tax_table(ps_all)) 
+
+plyr::ddply(prev_all, "phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+
+
+
+
+```
+
+
+```{r prevelance-plot}
+
+#Dashed horizontal line is drawn at 5% prevalence level
+#explore the relationship of prevalence and total read count for each feature 
+prev_all1 = subset(prev_all, phylum %in% get_taxa_unique(ps_all, "phylum"))
+
+ggplot(prev_all1, aes(TotalAbundance, Prevalence / nsamples(ps_all),color=family)) +
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() + xlab("Total Abundance") + ylab("Prevalence [Frac of Live Samples]") +
+  facet_wrap(~phylum) + theme(legend.position="none") 
+  
+```
+
+
+
+#Step 5) Prevalence filtering
+This is how you filter if you wanted to filter at a ceratin prevelance. 
+```{r prevelance-filtering}
+ nsamples(ps_all)
+ prev_thres_all = 0.05 * nsamples(ps_all)
+ prev_thres_all
+ ntaxa(ps_all)
+
+keepTaxa_all <- rownames(prev_all)[(prev_all$Prevalence >= prev_thres_all)]
+
+
+ ps_all.5 = prune_taxa(keepTaxa_all, ps_all)
+ ntaxa(ps_all.5)
+
+
+
+
+
+```
+
+
+
+
+

@@ -350,6 +350,8 @@ keepTaxa_all <- rownames(prev_all)[(prev_all$Prevalence >= prev_thres_all)]
  ps_all.5 = prune_taxa(keepTaxa_all, ps_all)
  ntaxa(ps_all.5)
 
+ 
+ saveRDS(ps_all.5, "~/landfill-microcosms/data/live_samples_objects/ps_all.5")
 
 
 

@@ -1,5 +1,5 @@
 ---
-title: "Landfill in a Bottle: Studying Microbial Dynamics Using Lab-Built Microcosms"
+title: "Basic Data Visualization"
 subtitle: "Amplicon data visualization and linear models"
 author: "Judy-Malas"
 date: "12/15/2021"
@@ -8,18 +8,15 @@ output:
     theme: readable
 ---
 
-# Study description
+This workflow will use tidyverse functions and ggplot to make visualizations such as boxplots, heatmaps, and histograms. This is meant as a first pass at seeing what the data look like. 
 
-The study used simulated landfill microcosms and tracked microbial populations over a 65 day period. Fifteen microcosms were set up identically on day 0, and DNA was sampled from all 15 microcosms on days 6 (T1), 20 (T2), 29 (T3), and 40 (T4). On day 40, three microcosms were destructively sampled for chemical measurements including sulfide, sulfate, total iron, and ferrous iron. On day 44, triplicate microcosms were "spiked" with different additives (sodium sulfate, antibiotics, and Fe(OH)3). Two additional DNA samples were taken at 50 (T5) days and 65 (T6) days of incubation from the remaining 12 microcosms. At the end of the 65 day period, all microcosms were destructively sampled for chemical concentrations of sulfide, sulfate, total iron, and ferrous iron. 
-
-We also set up "killed control" microcosms, which will be handled in another markdown file. This markdown only addresses the "live" micrcosoms. 
-The killed microcosms were setup by autoclaving, freezing, and autoclaving again.
+We also try our hand at linear models, however, these are likely not the best statistical tools for 16s data. Step 4; ordination, and Step 5; differential expression, are probably better tools to get some statistical power behind our results. 
 
 # Previous steps
 
 After sampling, DNA was extracted and a portion of the 16S rRNA gene was amplified and sequenced. The initial phase of data processing for 16s data involves demultiplexing, merging paired-end reads (forward and reverse), quality control, and binning sequences into amplicon sequence variants (ASVs -- also known as OTUs or operational taxonomic units). The ASVs are then matched to a reference library to identify their taxonomy. 
 
-This markdown picks up after this initial phase of data processing. In the following chunk, we have a "Phyloseq object" which was made in the phyloseq package in R. The object consists of an OTU table (ASVs abundance matched to samples); a metadata file (`sample_data`) which includes the time the sample was taken, spike added to the sample, etc.; a taxa_table which identifies which ASV is matched to which taxonomy by 6 taxonomic ranks (i.e. Kingdom, Phylum, Class, Order, Family, Genus); and an optional phylogentic tree.
+This markdown picks up after this initial phase of data processing.
 
 ## Loading packages & data 
 If phyloseq is not installed, un-comment the commented section. 
@@ -92,7 +89,6 @@ Let's check out the phyla present in the data. (Absolute counts, but it really d
    arrange(desc(n)) 
 ```
 *Firmicutes*, *Proteobacteria*, and *Actinobacteriota* are the most abudant Phyla. 
-
 
 
 ```{r histograms-of-abundance}

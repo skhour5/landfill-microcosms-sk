@@ -12,6 +12,10 @@ This workflow will use tidyverse functions and ggplot to make visualizations suc
 
 We also try our hand at linear models, however, these are likely not the best statistical tools for 16s data. Step 4; ordination, and Step 5; differential expression, are probably better tools to get some statistical power behind our results. 
 
+Before Starting: 
+
+* clear the global environment by clicking the broom AFTER making sure you have saved all the updated phyloseq objects from step 2
+
 
 ## Loading packages & data 
 If phyloseq is not installed, un-comment the commented section. 
@@ -27,10 +31,45 @@ library(tidymodels)
 library(RColorBrewer)
 ```
 
-
+This is the dataset used first, but I will also run some chunks with the other phyloseq objects created in step 2, depending on what I would like to do
 ```{r read_phyloseq_object}
 full_16s_dataset <- readRDS("../data/live_samples_objects/ps_all.step2")
 ```
+
+
+```{r import-all-objects}
+
+# live samples 
+
+ps_all.step2 <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.step2") 
+
+ps_all.rmout <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.rmout") #outlier removed
+
+vst_all.step2 <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all.step2")
+
+ps_all.rl <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.rl") 
+
+ps_all.prop <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.prop") 
+
+
+
+
+ #killed samples 
+
+ps_killed.step2 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.step2")
+
+ps_killed.rmout <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmout")
+
+vst_killed.step2 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.step2")
+
+ps_killed.rl <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rl")
+
+ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.prop")
+
+
+```
+
+
 
 In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
 ```{r define-calc-prop}
@@ -123,7 +162,7 @@ full_16s_df_rel %>%
   group_by(spike, Phylum, sample_time, Abundance, Genus) %>%  #select only these columns 
   summarise(mean_abundance = mean(Abundance)) %>%  #this line doesn't seem to be doing anything but the plot won't work without it.. 
   arrange(sample_time) %>% 
-  ggplot(aes(x = spike, y = phylum, fill = Abundance))+
+  ggplot(aes(x = spike, y = Phylum, fill = Abundance))+
     geom_tile() +
     facet_wrap(~sample_time) +
   theme(axis.text.x=element_text(angle = -90, hjust = 0))
@@ -210,10 +249,10 @@ full_16s_df_rel %>%
   mutate(Genus = case_when(Abundance < 0.02 ~ "Other < 2%",
                            is.na(Genus) ~ "Unclassified",
                                TRUE ~ Genus)) %>% 
-  mutate(Genus = fct_relevel(Genus, "Anoxybacillus", "Caproiciproducens", "Cupriavidus", "Oxobacter", "Sporolactobacillus", "Turicella", "Vulcaniibacterium", "Unclassified", "Other < 2%")) %>% 
+  #mutate(Genus = fct_relevel(Genus, "Anoxybacillus", "Caproiciproducens", "Cupriavidus", "Oxobacter", "Sporolactobacillus", "Turicella", "Vulcaniibacterium", #"Unclassified", "Other < 2%")) %>% 
   ggplot(aes(x = bottle, y = Abundance, fill= Genus, color = Genus)) +
   geom_bar(stat = "identity") +
-  facet_wrap(~sample_time, ncol = 3)+
+  #facet_wrap(~sample_time)+
   scale_color_manual(values= cols) +
   scale_fill_manual(values= cols) +
   theme_bw()+

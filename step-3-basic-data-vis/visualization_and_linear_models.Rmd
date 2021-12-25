@@ -29,7 +29,7 @@ library(RColorBrewer)
 
 
 ```{r read_phyloseq_object}
-full_16s_dataset <- readRDS("../data/live_samples_objects/ps_all")
+full_16s_dataset <- readRDS("../data/live_samples_objects/ps_all.step2")
 ```
 
 In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
@@ -72,17 +72,11 @@ theme_set(theme_bw())
 Let's check out the phyla present in the data. (Absolute counts, but it really doesn't matter if we use relative or absolute here)
 ```{r group-by-phyla-desc}
 
-new_thing<- as.data.frame(full_16s_df_abs)
-
  full_16s_df_abs %>%
-  group_by(phylum) %>% 
+  group_by(Phylum) %>% 
    count() %>% 
    arrange(desc(n)) 
 
-new_thing %>%
-  group_by(phylum) %>% 
-   count() %>% 
-   arrange(desc(n)) 
 
 ```
 *Firmicutes*, *Proteobacteria*, and *Actinobacteriota* are the most abudant Phyla. 
@@ -100,7 +94,7 @@ From the plot above we can see that most of the samples have OTUs with very low 
 The following chunk arranges the full dataset in descending order by Genus counts. 
 ```{r group-by-Genus-desc, echo = FALSE}
 genus_desending <- full_16s_df_abs %>% 
-   group_by(domain) %>% 
+   group_by(Genus) %>% 
    count() %>%  #count the number of observations in each Genus group 
    arrange(desc(n))  #arrange the counts in descending order
 
@@ -129,33 +123,13 @@ full_16s_df_rel %>%
   group_by(spike, Phylum, sample_time, Abundance, Genus) %>%  #select only these columns 
   summarise(mean_abundance = mean(Abundance)) %>%  #this line doesn't seem to be doing anything but the plot won't work without it.. 
   arrange(sample_time) %>% 
-  ggplot(aes(x = spike, y = Phylum, fill = Abundance))+
+  ggplot(aes(x = spike, y = phylum, fill = Abundance))+
     geom_tile() +
     facet_wrap(~sample_time) +
   theme(axis.text.x=element_text(angle = -90, hjust = 0))
 
 ```
 This is a nice plot, I think I like the heat maps better than the stacked barcharts... We'll see how it looks at other taxanomy levels
-
-```{r what-does-the-mean-abundance-do?}
-
-group_by_df = full_16s_df_rel %>% 
-  filter(sample_time == c("T1")) %>% #filter for only T1
-  group_by(spike, Phylum, sample_time, Abundance, Genus) %>%  #select only these columns 
-  summarise(mean_abundance = mean(Abundance)) %>%  #this line doesn't seem to be doing anything but the plot won't work without it.. 
-  arrange(desc(Abundance))
-
-select_df = full_16s_df_rel %>% 
-  filter(sample_time == c("T1")) %>% #filter for only T1 
-  select(spike, Phylum, sample_time, Abundance, Genus) %>% 
-  arrange(desc(Abundance))
-
-
-glimpse(select_df)
-glimpse(group_by_df)
-
-```
-> I still don't know how the summarise function is averaging the groups, but whatever, as long as it works. I'll revisit this later
 
 
 ```{r heatmaps-top-10-genera}

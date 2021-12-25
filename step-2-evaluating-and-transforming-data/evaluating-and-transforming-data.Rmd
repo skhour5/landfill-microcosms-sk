@@ -11,6 +11,24 @@ Here is the forked repository: https://github.com/jud-m/2018_ASM_Workshop.
 
 In this workflow we will assess the data in our phyloseq objects and make sure it is ready for downstream visualization and statistics. 
 
+* Inputs:
+  + ps_all
+  + vst_all 
+  + ps_killed 
+  +vst_killed 
+
+* outputs:
+  + ps_all.step2
+  + vst_all.step2 
+  + ps_all.rl
+  + ps_all.prop
+  + ps_killed.step2 
+  + vst_killed.step2 
+  + ps_killed.rl 
+  + ps_killed.prop
+
+
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -62,14 +80,13 @@ ps_all
 ```
 You should get a `phyloseq-class experiment-level object` with an `otu-table`, `sample_data`, `tax_table`, and `phy_tree()` (if a phylogentic tree was added)
 
-
-
+#Tidying Data
 
 ## Factor re-ordering 
 
 Here we have 4 groups; a control and four treatments (antibiotics, Fe(OH)3), and NA2SO4). 
 R generally lists characters in alphabetical order, so any plot we make will list antibiotics first. We probably want the control listed first instead.
-```{r}
+```{r, results= 'hide'}
 #ps_all 
 as.factor(sample_data(ps_all)$spike) #check the names of the levels
 sample_data(ps_all)$spike <- factor(sample_data(ps_all)$spike, levels = c("Control ", "Antibiotics", "Fe(OH)3", "Na2SO4")) #ran into an issue because "Control " had a space at the end of it; R is senstive to spaces
@@ -89,13 +106,36 @@ levels(sample_data(vst_all)$spike)
 as.factor(sample_data(ps_killed)$spike)
 sample_data(ps_killed)$spike <- factor(sample_data(ps_killed)$spike, levels = c("killed_control", "Antibiotics","Fe(OH)3", "Na2SO4"))
 levels(sample_data(ps_killed)$spike)
-#killed control is a clunky name, might want to change that to just control.. but will I want to merge the phyloseq objects at some point? Might be good to have a way to differentiate them?? That's gonna be true for all of the levels though. So I'm just gonna change it to control and find another way to differentiate later 
-sample_data(ps_killed)$spike <- factor(sample_data(ps_killed)$spike, labels = c("Control", "Antibiotics","Fe(OH)3", "Na2SO4"))
-
+  
 #vst_killed
-as.factor(sample_data(ps_killed)$spike)
+as.factor(sample_data(vst_killed)$spike)
 sample_data(ps_killed)$spike <- factor(sample_data(ps_killed)$spike, levels = c("killed_control", "Antibiotics","Fe(OH)3", "Na2SO4"))
 levels(sample_data(ps_killed)$spike)
+
+
+```
+
+```{r taxa-columnname-relabeling}
+
+newcolnames <- as.factor(c("Domain", "Phylum", "Class", "Order","Family" , "Genus",  "Species"))
+
+colnames(tax_table(ps_all))  <- newcolnames
+
+colnames(tax_table(ps_all))  #check that it worked
+
+
+colnames(tax_table(vst_all)) <- newcolnames
+
+colnames(tax_table(ps_killed)) <- newcolnames
+
+colnames(tax_table(vst_killed)) <- newcolnames
+
+
+colnames(tax_table(vst_all)) 
+
+colnames(tax_table(ps_killed))
+
+colnames(tax_table(vst_killed)) 
 
 
 ```
@@ -205,7 +245,7 @@ Both of these plots will help give an understanding of how your data are structu
 
 
 ## Step 2) Detect outlier samples
-```{r outlier-id-live}
+```{r outlier-id-live, results = 'hide'}
 
 #format a data table to combine summary data with sample variable data 
 ss_all = sample_sums(ps_all)
@@ -233,7 +273,7 @@ ss_all_boxplot
 
 ```
 
-```{r outlier-id-killed}
+```{r outlier-id-killed, results='hide'}
 
 #do the same for killed samples
 #format a data table to combine summary data with sample variable data 
@@ -245,6 +285,10 @@ ss_killed_df
 y= 1000 # set a thershold for th minimum number of acceptable reads, can start as a guess 
 x= "sample_time" # the x-axis variable you want to examine 
 label= "sample" 
+
+
+```
+```{r killed-plot}
 
 #plot the data by the treatment variable 
 
@@ -258,7 +302,10 @@ ss_killed_boxplot <- ggplot(ss_killed_df, aes_string(x, y = "ASV", color = "spik
 ss_killed_boxplot
 #it looks like NK4-T1 is an outlier here 
 
+
 ```
+
+
 The example data does have several samples with fewer than 1,000 ASV. 
 
 When questionable samples arise you should take note of them so if there are samples which behave oddly in downstream analysis you can recall this information and perhaps justify their removal. In this case lets remove them for practice. 
@@ -266,21 +313,21 @@ When questionable samples arise you should take note of them so if there are sam
 Here it looks like NK5T1 and AB1T4 are outliers; maybe remove them? 
 ```{r}
 
-# nsamples(ps_all) #check how many samples are present
-# nsamples(ps_killed)
-# 
-# ps_all <- ps_all %>%
-#   subset_samples(
-#     bottle_number != "AB1t4")
-# 
-# nsamples(ps_all) #check that the sample was removed
-# 
-# 
-# ps_killed <- ps_killed %>%
-#   subset_samples(
-#     bottle_number != "NK5t1")
-# 
-# 
+nsamples(ps_all) #check how many samples are present
+nsamples(ps_killed)
+
+ps_all.rmout <- ps_all %>%
+  subset_samples(
+    bottle_number != "AB1t4")
+
+nsamples(ps_all.rmout) #check that the sample was removed
+
+
+ps_killed.rmout <- ps_killed %>%
+  subset_samples(
+    bottle_number != "NK5t1")
+
+nsamples(ps_killed.rmout)
 
 ```
 
@@ -292,11 +339,11 @@ However, since these are landfill samples, I decided to keep everything
 
 ```{r check-unique-taxa}
 
-get_taxa_unique(ps_all, "domain")
-get_taxa_unique(ps_all, "phylum")
+get_taxa_unique(ps_all, "Domain")
+get_taxa_unique(ps_all, "Phylum")
 
-get_taxa_unique(ps_killed, "domain")
-get_taxa_unique(ps_killed, "phylum")
+get_taxa_unique(ps_killed, "Domain")
+get_taxa_unique(ps_killed, "Phylum")
 
 ```
 
@@ -306,7 +353,7 @@ get_taxa_unique(ps_killed, "phylum")
 
 #create a table for the number of features for each phyla
 
-table(tax_table(ps_all)[, "phylum"], exclude = NULL)
+table(tax_table(ps_all)[, "Phylum"], exclude = NULL)
 
 #compute prevalence of each feature + store as a data frome; defined as the number of samples in which taxa appears at least once
 prev_all <- apply(X = otu_table(ps_all), MARGIN = ifelse(taxa_are_rows(ps_all), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
@@ -314,7 +361,7 @@ prev_all <- apply(X = otu_table(ps_all), MARGIN = ifelse(taxa_are_rows(ps_all), 
 #add taxonomy and total read counts to this data frame
 prev_all  <- data.frame(Prevalence = prev_all, TotalAbundance = taxa_sums(ps_all), tax_table(ps_all)) 
 
-plyr::ddply(prev_all, "phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+plyr::ddply(prev_all, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
 
 
 
@@ -326,12 +373,12 @@ plyr::ddply(prev_all, "phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1
 
 #Dashed horizontal line is drawn at 5% prevalence level
 #explore the relationship of prevalence and total read count for each feature 
-prev_all1 = subset(prev_all, phylum %in% get_taxa_unique(ps_all, "phylum"))
+prev_all1 = subset(prev_all, Phylum %in% get_taxa_unique(ps_all, "Phylum"))
 
-ggplot(prev_all1, aes(TotalAbundance, Prevalence / nsamples(ps_all),color=family)) +
+ggplot(prev_all1, aes(TotalAbundance, Prevalence / nsamples(ps_all),color=Family)) +
   geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
   scale_x_log10() + xlab("Total Abundance") + ylab("Prevalence [Frac of Live Samples]") +
-  facet_wrap(~phylum) + theme(legend.position="none") 
+  facet_wrap(~Phylum) + theme(legend.position="none") 
   
 ```
 
@@ -417,10 +464,11 @@ ggarrange(p.nolog, p.log, ncol = 2, labels = c("A)", "B)"))
 
 dev.off()
 
-logtransformed_ps_all
 
+ggarrange(p.nolog, p.log, ncol = 2, labels = c("A)", "B)"))
 
 ```
+
 These data are more normal without the log transformation.. 
 
 ```{r ps_killed_transformations}
@@ -455,32 +503,54 @@ ggarrange(p.nolog.killed, p.log.killed, ncol = 2, labels = c("A)", "B)"))
 
 
 ```
+These are not normal either way 
 
 
 
-We can then use the function `psmelt` which will combine all the elements of the object, except the phylogentic tree, into a single data frame.
-Here I made two dataframes: one for the full dataset with absolute counts, and one for the full dataset with relative counts. 
-```{r create-dataframe-with-psmelt}
 
-# full_16s_df_rel <- psmelt(full_16s_dataset_relative)  
-# glimpse(full_16s_df_rel)
+#save all objects to take to the next step 
 
-# full_16s_df_abs <- psmelt(full_16s_dataset)
+* outputs:
+  + ps_all.step2
+  + vst_all.step2 
+  + ps_all.rl
+  + ps_all.prop
+  + ps_killed.step2 
+  + vst_killed.step2 
+  + ps_killed.rl 
+  + ps_killed.prop
+
+```{r save-new-phyloseq-objects}
+
+# live samples 
+
+saveRDS(ps_all, "~/landfill-microcosms/data/live_samples_objects/ps_all.step2") 
+
+saveRDS(ps_all.rmout, "~/landfill-microcosms/data/live_samples_objects/ps_all.rmout") #outlier removed
+
+saveRDS(vst_all, "~/landfill-microcosms/data/live_samples_objects/vst_all.step2")
+
+
+saveRDS(ps_all.rl, "~/landfill-microcosms/data/live_samples_objects/ps_all.rl") 
+
+saveRDS(ps_all.prop, "~/landfill-microcosms/data/live_samples_objects/ps_all.prop") 
+
+
+
+
+ #killed samples 
+
+saveRDS(ps_killed, "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.step2")
+
+saveRDS(ps_killed.rmout, "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmout")
+
+saveRDS(vst_killed, "~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.step2")
+
+saveRDS(ps_killed.rl, "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rl")
+
+saveRDS(ps_killed.prop, "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.prop")
 
 ```
-
-
-```{r create-dataframe-with-psmelt-updated}
-
-```
-
-
-```{r save-new-dataframes-to-data-folder}
-# saveRDS(full_16s_df_rel, file = "../data/full_16s_df_rel")
-# saveRDS(full_16s_df_abs, file = "../data/full_16s_df_abs")
-
-```
-
 
 
 

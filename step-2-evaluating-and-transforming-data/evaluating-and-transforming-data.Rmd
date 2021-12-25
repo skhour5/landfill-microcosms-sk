@@ -102,7 +102,7 @@ levels(sample_data(ps_killed)$spike)
 
 
 
-
+# Evaluating Data 
 
 There are several possible ways to evaluate the data, but a standard approach consists of the following
 
@@ -204,7 +204,7 @@ Both of these plots will help give an understanding of how your data are structu
 
 
 
-#Step 2) Detect outlier samples
+## Step 2) Detect outlier samples
 ```{r outlier-id-live}
 
 #format a data table to combine summary data with sample variable data 
@@ -285,8 +285,9 @@ Here it looks like NK5T1 and AB1T4 are outliers; maybe remove them?
 ```
 
 
-#Step 3) Taxon cleaning
-There may be some taxa that shouldn't be included in analysis, e.g. "Chloroplast / Cyanobacteria"
+## Step 3) Taxon cleaning
+Here is where we findout if there are some taxa that shouldn't be included in analysis, e.g. "Chloroplast / Cyanobacteria". 
+However, since these are landfill samples, I decided to keep everything
 
 
 ```{r check-unique-taxa}
@@ -300,7 +301,7 @@ get_taxa_unique(ps_killed, "phylum")
 ```
 
 
-#Step 4) Prevalence assesment 
+## Step 4) Prevalence assesment 
 ```{r}
 
 #create a table for the number of features for each phyla
@@ -336,7 +337,7 @@ ggplot(prev_all1, aes(TotalAbundance, Prevalence / nsamples(ps_all),color=family
 
 
 
-#Step 5) Prevalence filtering
+## Step 5) Prevalence filtering
 This is how you filter if you wanted to filter at a ceratin prevelance. 
 ```{r prevelance-filtering}
  nsamples(ps_all)
@@ -358,6 +359,127 @@ keepTaxa_all <- rownames(prev_all)[(prev_all$Prevalence >= prev_thres_all)]
 
 ```
 
+
+# Transforming Data
+
+
+We can use the `transform_sample_counts` function to transform the data with the OTU tables of the phyloseq objects directly. 
+We can do a variety of different transformations on the phyloseq object. 
+The `vst_all` phyloseq object already has transformed counts, so we would only do these transformations on the ps_all phyloseq object, or the untransformed data. 
+
+```{r data-transformations}
+
+ps_all.rl <- transform_sample_counts(ps_all, function(OTU) OTU/sum(OTU)) #relative abundances 
+
+ps_all.prop <- transform_sample_counts(ps_all, function(x) min(sample_sums(ps_all)) * x/sum(x))
+                                       
+ps_all.log <- transform_sample_counts(ps_all, function(x) log(1 + x))
+                  
+
+```
+
+
+```{r view-transformations}
+
+par(mfrow=c(1,4))
+
+plot(sort(sample_sums(ps_all), TRUE), type = "o", main = "Native", ylab = "RSVs", xlab = "Samples")
+
+plot(sort(sample_sums(ps_all.rl), TRUE), type = "o", main = "Relative Abundance", ylab = "RSVs", xlab = "Samples")
+
+plot(sort(sample_sums(ps_all.prop), TRUE), type = "o", main = "Proportional Abundance", ylab = "RSVs", xlab = "Samples")
+
+plot(sort(sample_sums(ps_all.log), TRUE), type = "o", main ="log Transformed" , ylab = "RSVs", xlab = "Samples")
+
+par(mfrow=c(1,4))
+
+
+
+```
+RSVs = ASVs 
+
+```{r view-histograms}
+
+jpeg("~/landfill-microcosms/step-3-basic-data-vis/Figures/logtransformed_ps_all.jpg", width = 600, quality = 100)
+
+p.nolog <- qplot(rowSums(otu_table(ps_all))) + ggtitle("Raw Counts") +
+  theme_bw() +
+  xlab("Row Sum") +
+  ylab("# of Samples")
+
+p.log <- qplot(log10(rowSums(otu_table(ps_all.log)))) +
+  ggtitle("log10 transformed counts") +
+  theme_bw() +
+  xlab("Row Sum") +
+  ylab("# of Samples")
+
+ggarrange(p.nolog, p.log, ncol = 2, labels = c("A)", "B)"))
+
+dev.off()
+
+logtransformed_ps_all
+
+
+```
+These data are more normal without the log transformation.. 
+
+```{r ps_killed_transformations}
+
+
+ps_killed.rl <- transform_sample_counts(ps_killed, function(OTU) OTU/sum(OTU)) #relative abundances 
+
+ps_killed.prop <- transform_sample_counts(ps_killed, function(x) min(sample_sums(ps_all)) * x/sum(x))
+                                       
+ps_killed.log <- transform_sample_counts(ps_killed, function(x) log(1 + x))
+
+
+jpeg("~/landfill-microcosms/step-3-basic-data-vis/Figures/logtransformed_ps_killed.jpg", width = 600, quality = 100)
+
+p.nolog.killed <- qplot(rowSums(otu_table(ps_killed))) + ggtitle("Raw Counts") +
+  theme_bw() +
+  xlab("Row Sum") +
+  ylab("# of Samples")
+
+p.log.killed <- qplot(log10(rowSums(otu_table(ps_killed.log)))) +
+  ggtitle("log10 transformed counts") +
+  theme_bw() +
+  xlab("Row Sum") +
+  ylab("# of Samples")
+
+ggarrange(p.nolog.killed, p.log.killed, ncol = 2, labels = c("A)", "B)"))
+
+dev.off()
+
+ggarrange(p.nolog.killed, p.log.killed, ncol = 2, labels = c("A)", "B)"))
+
+
+
+```
+
+
+
+We can then use the function `psmelt` which will combine all the elements of the object, except the phylogentic tree, into a single data frame.
+Here I made two dataframes: one for the full dataset with absolute counts, and one for the full dataset with relative counts. 
+```{r create-dataframe-with-psmelt}
+
+# full_16s_df_rel <- psmelt(full_16s_dataset_relative)  
+# glimpse(full_16s_df_rel)
+
+# full_16s_df_abs <- psmelt(full_16s_dataset)
+
+```
+
+
+```{r create-dataframe-with-psmelt-updated}
+
+```
+
+
+```{r save-new-dataframes-to-data-folder}
+# saveRDS(full_16s_df_rel, file = "../data/full_16s_df_rel")
+# saveRDS(full_16s_df_abs, file = "../data/full_16s_df_abs")
+
+```
 
 
 

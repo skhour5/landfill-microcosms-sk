@@ -12,11 +12,6 @@ This workflow will use tidyverse functions and ggplot to make visualizations suc
 
 We also try our hand at linear models, however, these are likely not the best statistical tools for 16s data. Step 4; ordination, and Step 5; differential expression, are probably better tools to get some statistical power behind our results. 
 
-# Previous steps
-
-After sampling, DNA was extracted and a portion of the 16S rRNA gene was amplified and sequenced. The initial phase of data processing for 16s data involves demultiplexing, merging paired-end reads (forward and reverse), quality control, and binning sequences into amplicon sequence variants (ASVs -- also known as OTUs or operational taxonomic units). The ASVs are then matched to a reference library to identify their taxonomy. 
-
-This markdown picks up after this initial phase of data processing.
 
 ## Loading packages & data 
 If phyloseq is not installed, un-comment the commented section. 
@@ -32,17 +27,16 @@ library(tidymodels)
 library(RColorBrewer)
 ```
 
-In the following chunk, we have a "Phyloseq object" which was made in the phyloseq package in R. The object consists of an OTU table (ASVs abundance matched to samples); a metadata file (`sample_data`) which includes the time the sample was taken, spike added to the sample, etc.; a taxa_table which identifies which ASV is matched to which taxonomy by 6 taxonomic ranks (i.e. Kingdom, Phylum, Class, Order, Family, Genus); and an optional phylogentic tree.
 
 ```{r read_phyloseq_object}
-full_16s_dataset <- readRDS("../data/all")
+full_16s_dataset <- readRDS("../data/live_samples_objects/ps_all")
 ```
 
 In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
 ```{r define-calc-prop}
 
 calc_prop <- function(x){x / sum(x)}
-
+# 
 full_16s_dataset_relative <- transform_sample_counts(full_16s_dataset, calc_prop)
 ```
 
@@ -50,26 +44,20 @@ We can then use the function `psmelt` which will combine all the elements of the
 Here I made two dataframes: one for the full dataset with absolute counts, and one for the full dataset with relative counts. 
 ```{r create-dataframe-with-psmelt}
 
-full_16s_df_rel <- psmelt(full_16s_dataset_relative)  
-glimpse(full_16s_df_rel)
+full_16s_df_rel <- psmelt(full_16s_dataset_relative)
 
 full_16s_df_abs <- psmelt(full_16s_dataset)
 
 ```
 
-```{r save-new-dataframes-to-data-folder}
-saveRDS(full_16s_df_rel, file = "../data/full_16s_df_rel")
-saveRDS(full_16s_df_abs, file = "../data/full_16s_df_abs")
-
-```
-
 
 ##Tidying data 
+I don't think I need this anymore because I already re-leveled the spikes in step-2
 ```{r relevel-spikes, results = 'hide'}
-as.factor(full_16s_df_rel$spike)
-
-full_16s_df_rel <- full_16s_df_rel %>% 
-  mutate(spike = fct_relevel(spike, "Control ", "Antibiotics", "Fe(OH)3", "Na2SO4"))
+# as.factor(full_16s_df_rel$spike)
+# 
+# full_16s_df_rel <- full_16s_df_rel %>% 
+#   mutate(spike = fct_relevel(spike, "Control ", "Antibiotics", "Fe(OH)3", "Na2SO4"))
 
 ```
 
@@ -83,10 +71,19 @@ theme_set(theme_bw())
 
 Let's check out the phyla present in the data. (Absolute counts, but it really doesn't matter if we use relative or absolute here)
 ```{r group-by-phyla-desc}
- full_16s_df_abs %>% 
-   group_by(Phylum) %>% 
+
+new_thing<- as.data.frame(full_16s_df_abs)
+
+ full_16s_df_abs %>%
+  group_by(phylum) %>% 
    count() %>% 
    arrange(desc(n)) 
+
+new_thing %>%
+  group_by(phylum) %>% 
+   count() %>% 
+   arrange(desc(n)) 
+
 ```
 *Firmicutes*, *Proteobacteria*, and *Actinobacteriota* are the most abudant Phyla. 
 
@@ -103,7 +100,7 @@ From the plot above we can see that most of the samples have OTUs with very low 
 The following chunk arranges the full dataset in descending order by Genus counts. 
 ```{r group-by-Genus-desc, echo = FALSE}
 genus_desending <- full_16s_df_abs %>% 
-   group_by(Genus) %>% 
+   group_by(domain) %>% 
    count() %>%  #count the number of observations in each Genus group 
    arrange(desc(n))  #arrange the counts in descending order
 

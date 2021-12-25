@@ -44,11 +44,6 @@ vst_killed <-readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_k
 ```
 
 
-#                          PART III: Let's make figures!   
-    --> using the variance stabilizing transformation (vst) phyloseq object from here on out [except for the diversity plots e.g. shannon, simpson, etc.]
-              
-    0.1]Assigning plot colors 
-    0.2] Transform data into relative counts
 A] Distance Measures; Ordination plots
 B] Alpha diveristy
 C] Taxa summaries
@@ -847,36 +842,6 @@ new = prune_taxa(core_taxa_id, vst_all_rel_1)
 https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/advanced-models-for-differential-abundance.html
 
 ```{r}
-
-```
-
-
-
-#Trying to create a count tab with meaningful rownames
-incomplete, ignore
-```{r}
-
-taxonomy = as.data.frame(tax_table(vst_all)) #extracting the taxatable from vst_all phyloseq object 
-
-counts_all = as.data.frame(otu_table(vst_all)) #extracting the otu table 
-counts_all.t = t(counts_all) #transposing the otutable
-
-taxonomy$taxalabel = paste(new_taxanames$Family, new_taxanames$Genus) #adding a column with the Family and Genus name in one label 
-replace(taxonomy$taxalabel, taxonomy$taxalabel=="NA NA", "Other") #placing the "NA NA" data with "other"
-
-taxonomy$taxalabel2 = paste(new_taxanames$Order, new_taxanames$Family) 
-
-replace(taxonomy$taxalabel2, taxonomy$taxalabel2=="NA NA", "Other")
-
-identical(rownames(counts_all.t), rownames(taxonomy))#are the rownames identifical?
-#TRUE
-
-rownames(taxonomy) = taxonomy$taxalabel2
-
-summary(vst_all)
-
-
-
 
 ```
 

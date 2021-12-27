@@ -5,6 +5,11 @@ date: "12/22/2021"
 output: html_document
 ---
 
+## Before Starting 
+
+* Make sure your clear the global environment by clicking on the broom in R studio 
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -37,7 +42,6 @@ library(dplyr) # data handling
 
 
 ```
-
 
 
 ```{r import-all-objects}
@@ -74,7 +78,6 @@ ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/
 ```
 
 
-
 A] Distance Measures; Ordination plots
 B] Alpha diveristy
 C] Taxa summaries
@@ -85,32 +88,93 @@ C] Taxa summaries
 
 -----
 
-#### 0.1] Assigning plot colors
+#### update the metadata tables
 
-```{r}
+```{r add_new_column, eval=FALSE}
 
-exper_colors <-  c( "gray50", "blue", "firebrick1", "gold")
+ps_all.step2_samdata <- ps_all.step2@sam_data #extract the sample data 
+
+new_sam_data <- ps_all.step2_samdata %>% 
+  mutate(treatment =  #add a new column of data which specifies whether the samples have ACTUALLY been treated with a spike
+           case_when(sample_time == "T1" ~ "None", 
+                     sample_time == "T2" ~ "None", 
+                    sample_time == "T3" ~ "None", 
+                        sample_time == "T4" ~ "None", 
+                        sample_time == "T5" ~ as.character(spike), 
+                    sample_time == "T6" ~ as.character(spike))) 
+
+new_sam_data <- new_sam_data %>% 
+  mutate(treatment = ifelse(treatment == "Control", "None", treatment)) #change "Control" to "none" in the new treatment variable
+
+
+as.factor(new_sam_data$treatment)
+
+new_sam_data <- new_sam_data %>% 
+  mutate(treatment = fct_relevel(treatment, "None", "Antibiotics", "Fe(OH)3", "Na2SO4"))
+  
+
+
+ps_all.step2@sam_data = new_sam_data # assign the new dataframe to the phyloseq object
+vst_all.step2@sam_data = new_sam_data
+
+
+
 
 ```
 
-#### 0.2] re-simplifying names
 
+####  Assigning plot colors
+
+
+These are the original colors I was using, but they are not colorblind friendly
+```{r assign-colors}
+
+# exper_colors <-  c( "gray50", "blue", "firebrick1", "gold")
+
+
+
+```
+
+```{r list-all-cb-friendly-palettes}
+
+brewer.pal.info %>% 
+  filter(colorblind == T)
+  
+```
+
+```{r visualize-all-cb-friendly-palettes}
+display.brewer.all(colorblindFriendly = T)
+```
+
+
+Ended up using colors in the 8-color plalette for color blindness: 
+
+http://mkweb.bcgsc.ca/colorblind/img/colorblindness.palettes.v11.pdf
+
+```{r updated-assign-colors}
+exper_colors <- c("black", "#3DB7E9",  "#D55E00", "#F0E442")
+```
+
+
+
+
+#### re-simplifying names
 ```{r}
 
+ps_all <- ps_all.step2
 vst_all <- vst_all.step2
 
 ```
 
 
-
-
 #A] Distance Measures; Ordination plots
 
-```{r nmds-bray}
+```{r nmds-bray-vst-all}
 
-nmds_bray_vst_all = ordinate(vst_all, method="NMDS", distance = "bray")
+nmds_bray_vst_all <- ordinate(vst_all, method="NMDS", distance = "bray")
 
-nmds_bray_vst_all_plot  <- plot_ordination(vst_all, nmds_bray_vst_all, color = "spike", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
+nmds_bray_vst_all_plot  <-
+  plot_ordination(vst_all, nmds_bray_vst_all, color = "spike", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
     scale_color_manual(values= exper_colors) + 
     geom_point(size=3.5)
 nmds_bray_vst_all_plot #print the plot
@@ -118,11 +182,28 @@ nmds_bray_vst_all_plot #print the plot
 
 ```
 
-```{r pcoa-wunifrac}
+Here we're using the new treatment variable we made to make the plot
+```{r nmds-bray-vst-all-treatment}
 
-PCoA_wunifrac_vst_all = phyloseq::ordinate(vst_all, method="PCoA", distance = "wunifrac")
+nmds_bray_vst_all_plot  <-
+  plot_ordination(vst_all, nmds_bray_vst_all, color = "treatment", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5)+ 
+    theme_bw()
 
-PCoA_wunifrac_vst_all_plot  <- plot_ordination(vst_all , PCoA_wunifrac_vst_all, color = "spike", shape ="sample_time", title = "wUnifrac PCoA") +
+
+nmds_bray_vst_all_plot #print the plot
+
+
+```
+
+
+```{r pcoa-wunifrac-vst-all}
+
+PCoA_wunifrac_vst_all <-  phyloseq::ordinate(vst_all, method="PCoA", distance = "wunifrac")
+
+PCoA_wunifrac_vst_all_plot  <-
+  plot_ordination(vst_all , PCoA_wunifrac_vst_all, color = "spike", shape ="sample_time", title = "wUnifrac PCoA") +
   geom_point(size=3.5) +
   scale_color_manual(values= exper_colors)
 
@@ -131,14 +212,25 @@ PCoA_wunifrac_vst_all_plot
 
 ```
 
+```{r pcoa-wunifrac-vst-all-treatment}
 
-```{r pcoa-unifrac}
+PCoA_wunifrac_vst_all_plot  <-
+  plot_ordination(vst_all , PCoA_wunifrac_vst_all, color = "treatment", shape ="sample_time", title = "wUnifrac PCoA") +
+  geom_point(size=3.5) +
+  scale_color_manual(values= exper_colors) + 
+  theme_bw()
 
-rownames(vst_all@otu_table)
+PCoA_wunifrac_vst_all_plot
 
-PCoA_unifrac_vst_all <-  ordinate(ps_all.step2, method="PCoA", distance = "unifrac")
+```
 
-PCoA_unifrac_vst_all_plot <-  plot_ordination(ps_all.step2, PCoA_unifrac_vst_all, color = "spike", shape ="sample_time", title = "unifrac PCoA Ordered") +
+
+```{r pcoa-unifrac-untransformed}
+
+
+PCoA_unifrac_vst_all <-  ordinate(ps_all, method="PCoA", distance = "unifrac")
+
+PCoA_unifrac_vst_all_plot <-  plot_ordination(ps_all, PCoA_unifrac_vst_all, color = "treatment", shape ="sample_time", title = "unifrac PCoA Untransformed") +
     scale_color_manual(values= exper_colors) +
     geom_point(size=3.5)
 

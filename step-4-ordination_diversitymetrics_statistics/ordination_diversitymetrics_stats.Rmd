@@ -9,7 +9,6 @@ output: html_document
 
 * Make sure your clear the global environment by clicking on the broom in R studio 
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -79,12 +78,11 @@ ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/
 ```
 
 
------
 
 # Update Phyloseq Objects
 #### update the metadata tables
 
-```{r add_new_column, eval=FALSE}
+```{r add_new_column}
 
 ps_all.step2_samdata <- ps_all.step2@sam_data #extract the sample data 
 
@@ -425,6 +423,7 @@ Non-phylogenetic diversities (non vst)
 all <- ps_all #we'll be working with this phyloseq object from here
 
 div = alpha(all, index="all")  
+
 data.table(div)
 
 # get the metadata out as seprate object
@@ -440,7 +439,7 @@ div$sam_name <- rownames(div)
 div.df <- merge(div, meta, by = "sam_name")
 
 # check the tables
-div
+div.df
 
 
 ```
@@ -506,9 +505,21 @@ print(p_div_1)
 
 ```{r faceted-shannon-plot}
 
+jpeg("~/landfill-microcosms/step-4-ordination_diversitymetrics_statistics/Figures/faceted-shannon-plot.jpeg", quality = 100)
+
+
 div.df %>%
-  group_by(spike) %>% 
-  summarize(avg_simp = mean(diversity_shannon))
+  group_by(spike, sample_time, treatment) %>% 
+  dplyr::summarise(avg_shan = mean(diversity_shannon)) %>% 
+  ggplot(aes(sample_time, avg_shan, color = treatment)) + 
+  geom_point()+ 
+  facet_wrap(~spike)+
+  theme_bw()+
+  scale_color_manual(values = exper_colors)
+
+dev.off()
+  
+
 
 
 ```
@@ -545,13 +556,7 @@ Simpson_plot  + scale_color_manual(values= exper_colors)
 ```
 
 
-
-
-
-
-
-
-#0.3]taxa glom
+taxa glom
 ```{r}
 # #summes all ASVs that were in the same level
 # 
@@ -563,17 +568,6 @@ Simpson_plot  + scale_color_manual(values= exper_colors)
 # vst_all_rel_glom_phylum = tax_glom(vst_all_rel_1, taxrank= "Phylum")
 # 
 
-
-```
-
-
-
-
-
-#C-1-1] Arrange boxplots in a grid together
-```{r}
-# ggarrange(boxplot_Phylum, boxplot_Family, nrow=1)
-# boxplot_genus
 
 ```
 

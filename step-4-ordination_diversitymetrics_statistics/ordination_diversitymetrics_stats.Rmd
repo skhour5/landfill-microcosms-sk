@@ -5,7 +5,7 @@ date: "12/22/2021"
 output: html_document
 ---
 
-## Before Starting 
+# Before Starting 
 
 * Make sure your clear the global environment by clicking on the broom in R studio 
 
@@ -39,6 +39,7 @@ library(RColorBrewer) # nice color options
 library(ggpubr) # publication quality figures, based on ggplot2
 library(DT) # interactive tables in html and markdown
 library(dplyr) # data handling  
+library(data.table)
 
 
 ```
@@ -78,16 +79,9 @@ ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/
 ```
 
 
-A] Distance Measures; Ordination plots
-B] Alpha diveristy
-C] Taxa summaries
-  C-1] Boxplots 
-    0.4] make a dataframe from a phyloseq object.
-  C-1-1] Arrange boxplots in a grid together
-  C-2] Barcharts
-
 -----
 
+# Update Phyloseq Objects
 #### update the metadata tables
 
 ```{r add_new_column, eval=FALSE}
@@ -114,13 +108,58 @@ new_sam_data <- new_sam_data %>%
   
 
 
+```
+
+```{r add_new_column_killed_samdata}
+
+ps_killed.step2_samdata <- ps_killed.step2@sam_data #extract the sample data 
+
+new_sam_data_killed <- ps_killed.step2_samdata %>% 
+  mutate(treatment =  #add a new column of data which specifies whether the samples have ACTUALLY been treated with a spike
+           case_when(sample_time == "T1" ~ "None", 
+                     sample_time == "T2" ~ "None", 
+                    sample_time == "T3" ~ "None", 
+                        sample_time == "T4" ~ "None", 
+                        sample_time == "T5" ~ as.character(spike), 
+                    sample_time == "T6" ~ as.character(spike), 
+                    sample_time == "T7"~as.character(spike))) 
+
+new_sam_data_killed <- new_sam_data_killed %>% 
+  mutate(treatment = ifelse(treatment == "killed_control", "None", treatment)) #change "Control" to "none" in the new treatment variable
+
+
+as.factor(new_sam_data_killed$treatment)
+
+new_sam_data_killed <- new_sam_data_killed %>% 
+  mutate(treatment = fct_relevel(treatment, "None", "Antibiotics", "Fe(OH)3", "Na2SO4"))
+
+levels(new_sam_data_killed$treatment)
+
+```
+
+
+```{r update-physeq-objects}
+
 ps_all.step2@sam_data = new_sam_data # assign the new dataframe to the phyloseq object
 vst_all.step2@sam_data = new_sam_data
-
-
+ps_killed.step2@sam_data = new_sam_data_killed
+vst_killed.step2@sam_data = new_sam_data_killed
 
 
 ```
+
+
+
+#### re-simplifying names
+```{r rename-physeq-objects}
+
+ps_all <- ps_all.step2
+vst_all <- vst_all.step2
+ps_killed <- ps_killed.step2
+vst_killed <- vst_killed.step2
+
+```
+
 
 
 ####  Assigning plot colors
@@ -130,8 +169,6 @@ These are the original colors I was using, but they are not colorblind friendly
 ```{r assign-colors}
 
 # exper_colors <-  c( "gray50", "blue", "firebrick1", "gold")
-
-
 
 ```
 
@@ -156,19 +193,11 @@ exper_colors <- c("black", "#3DB7E9",  "#D55E00", "#F0E442")
 ```
 
 
+# Distance Measures; Ordination plots
 
+## Live Samples 
 
-#### re-simplifying names
-```{r}
-
-ps_all <- ps_all.step2
-vst_all <- vst_all.step2
-
-```
-
-
-#A] Distance Measures; Ordination plots
-
+### Bray-Curtis
 ```{r nmds-bray-vst-all}
 
 nmds_bray_vst_all <- ordinate(vst_all, method="NMDS", distance = "bray")
@@ -198,6 +227,7 @@ nmds_bray_vst_all_plot #print the plot
 ```
 
 
+### Weighted Unifrac 
 ```{r pcoa-wunifrac-vst-all}
 
 PCoA_wunifrac_vst_all <-  phyloseq::ordinate(vst_all, method="PCoA", distance = "wunifrac")
@@ -225,6 +255,21 @@ PCoA_wunifrac_vst_all_plot
 ```
 
 
+This part doesn't work because there are too few points
+```{r draw-ellipse}
+
+# PCoA_wunifrac_vst_all_plot +
+#   scale_color_manual(values= exper_colors) +
+#   geom_point(size=3.5) +
+#   stat_ellipse(type="norm", geom="polygon", alpha=1/10)
+
+
+```
+
+
+
+### Unweighted Unifrac
+This only works with untransformed data; the original phyloseq object (ps_all)
 ```{r pcoa-unifrac-untransformed}
 
 
@@ -240,15 +285,26 @@ PCoA_unifrac_vst_all_plot
 ```
 
 
-#A-1] Create an ellipse around
-This part doesn't work because there are too few points
-```{r}
+## Killed Samples
 
-PCoA_wunifrac_vst_all_plot +
-  scale_color_manual(values= exper_colors) +
-  geom_point(size=3.5) +
-  stat_ellipse(type="norm", geom="polygon", alpha=1/10)
+The killed samples have an extra data time sample @ T6 because we didn't take the T6 sample for the live samples
+```{r remove-t7}
 
+ps_killed.rmt7 <- subset_samples(ps_killed, sample_time != "T6")
+vst_killed.rmt7 <-subset_samples(vst_killed, sample_time != "T6")
+
+as.character(sample_data(ps_killed.rmt7)$sample_time)
+
+#now we need to rename T7 to T6
+
+samdata_rmt7 <- ps_killed.rmt7@sam_data
+
+samdata_rmt7 <- samdata_rmt7 %>% 
+  mutate(sample_time = case_when(sample_time == "T7" ~ "T6", 
+                                 TRUE ~ sample_time))
+         
+
+as.factor(samdata_rmt7$sample_time) #change back to a factor 
 
 
 
@@ -256,7 +312,83 @@ PCoA_wunifrac_vst_all_plot +
 ```
 
 
-#B] Alpha diversity 
+```{r update-sampledata-killed}
+
+sample_data(ps_killed.rmt7) = samdata_rmt7
+sample_data(vst_killed.rmt7) = samdata_rmt7
+
+```
+
+
+### Bray Curtis 
+Here we're using the new treatment variable we made to make the plot
+```{r nmds-bray-vst-killed-treatment}
+
+nmds_bray_vst_killed <- ordinate(vst_killed, method="NMDS", distance = "bray")
+
+
+
+nmds_bray_vst_killed.plot  <-
+  plot_ordination(vst_killed, nmds_bray_vst_killed, color = "treatment", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5)+ 
+    theme_bw()
+
+
+nmds_bray_vst_killed.plot #print the plot
+
+
+```
+
+```{r nmds-bray-vst-killed-treatment.rmt7}
+
+nmds_bray_vst_killed.rmt7 <- ordinate(vst_killed.rmt7, method="NMDS", distance = "bray")
+
+
+
+nmds_bray_vst_killed.plot.rmt7  <-
+  plot_ordination(vst_killed.rmt7, nmds_bray_vst_killed.rmt7, color = "treatment", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5)+ 
+    theme_bw()
+
+
+nmds_bray_vst_killed.plot.rmt7 #print the plot
+
+
+```
+
+
+### Weighted Unifrac 
+```{r pcoa-wunifrac-vst-killed}
+
+PCoA_wunifrac_vst_killed <-  phyloseq::ordinate(vst_killed.rmt7, method="PCoA", distance = "wunifrac")
+
+PCoA_wunifrac_vst_all_killed.plot  <-Ω`cPCoA_wunifrac_vst_all_killed.plotvv
+  plot_ordination(vst_killed.rmt7 , PCoA_wunifrac_vst_killed, color = "treatment", shape ="sample_time", title = "wUnifrac PCoA killed") +
+  geom_point(size=3.5) +
+  scale_color_manual(values= exper_colors)
+
+PCoA_wunifrac_vst_all_killed.plot
+
+
+```
+
+
+##### Combine Killed and Live samples vst 
+
+For this I would likely have to either make a phloseq object with both sets of samples from the beginning, or make 2 objects without the trees, and then merge them together. Honestly not sure it's worth comparing these two datasets; might come back to it later. 
+```{r}
+
+#vst_combo <- merge_phyloseq(vst_all, vst_killed.rmt7)
+## Error in FUN(X[[i]], ...) : one tree has a different number of tips
+
+
+```
+
+
+
+# Alpha diversity 
 Used to identify within individual taxa richness and evenness
 The commonly used metrics/indices are Shannon, Inverse Simpson, Simpson, Gini, Observed and Chao1. These indices do not take into account the phylogeny of the taxa identified in sequencing. Phylogenetic diversity (Faith’s PD) uses phylogenetic distance to calculate the diversity of a given sample. (Sudarshan et al., 2020)
 
@@ -264,28 +396,12 @@ The commonly used metrics/indices are Shannon, Inverse Simpson, Simpson, Gini, O
 One has to consider the sequencing depth (how much of the taxa have been sampled) for each sample. If there is a large difference, then it is important to normalize the samples to equal sampling depth. First, we look at the sampling depth (no. of reads per sample).
 ```{r}
 
-
-
-print(vst_all)
-
-summary(sample_sums(vst_all)) #number of reads per sample
-#there isn't a large difference between the min and max 
-#I'm going to look at the non vst phyloseq object 
-
-
-all <- ps_all.step2
-
-summary(sample_sums(all))
-#so obviously the vst trims down the number of reads significantly somehow. Again, I need to read the paper
+summary(sample_sums(ps_all))
 
 #we can plot the rarefaction curve for the observed ASVs in the entire dataset, this is a way to check how the richness captured in the sequencing effort 
 
-#otu_tab = t(abundances(vst_all)) 
+otu_tab = t(abundances(ps_all))  #t = transpose I think, not sure why we transposed it
 
-
-otu_tab = t(abundances(all))  #t = transpose I think, not sure why we transposed it
-
-#this step doesn't work with the vst_all, probably because of something abotu the way we transformed it
 
 
 #plot of species/reads
@@ -300,12 +416,14 @@ p = vegan::rarecurve(otu_tab,
 ```
 
 Non-phylogenetic diversities (non vst)
-```{r}
+```{r create-table-of-diversity-metrics}
 #make sure you have the most up-to-date version of the microbiome package; use #BiocManager::install("microbiome") #update all
 #sometimes you have to unlaod and re-load the package for this step to work 
 #let's calculate diversity
 #this also doesn't work with vst_all
 #turns out it's not suppose to work with the variance stabilizing transformation, so just use the original phyloseq object
+all <- ps_all #we'll be working with this phyloseq object from here
+
 div = alpha(all, index="all")  
 data.table(div)
 
@@ -322,63 +440,54 @@ div$sam_name <- rownames(div)
 div.df <- merge(div, meta, by = "sam_name")
 
 # check the tables
-colnames(div)
+div
 
 
-# Now use this data frame to plot 
-p_div <- ggboxplot(div.df, 
-               x = "spike", 
-               y = "diversity_shannon",
-              fill = "spike", 
-              palette = "jco")
+```
 
-p_div <- p_div + rotate_x_text()
+```{r plot-shannon}
 
-print(p_div)
+# 
+# p_div <- ggboxplot(div.df, 
+#                x = "spike", 
+#                y = "diversity_shannon",
+#               fill = "spike", 
+#               palette = "jco")
+# 
+# p_div <- p_div + rotate_x_text()
+# 
+# print(p_div)
+# 
+# 
+# 
+# #Seperate by both spike and time using metadata
+# p_div_1 <- ggboxplot(div.df, 
+#                x = "spike_time", 
+#                y = "diversity_shannon",
+#               fill = "sample_time")
+# 
+# 
+# p_div_1 <- p_div_1 + rotate_x_text()
+# 
+# print(p_div_1)
 
 
+```
 
-#Seperate by both spike and time using metadata
-p_div_1 <- ggboxplot(div.df, 
-               x = "spike_time", 
-               y = "diversity_shannon",
-              fill = "sample_time")
+```{r re-level-samples}
 
+as.factor(div.df$spike_time)
 
-p_div_1 <- p_div_1 + rotate_x_text()
-
-print(p_div_1)
-
-#I need to re-order the samples so that ABT4 is 
-
-
+div.df$spike_time = factor(div.df$spike_time, levels = c("ABT1", "ABT2", "ABT3", "ABT4" , "ABT5" ,"ABT6", "FeT1","FeT2" ,"FeT3" ,"FeT4", "FeT5" ,"FeT6", "NLT1", "NLT2", "NLT3", "NLT4", "NLT5", "NLT6", "ST1" , "ST2",  "ST3",  "ST4", "ST5" , "ST6"))
 
 
 ```
 
 
 shannon phylogenetic diversity w/re-ordered samples (non vst)
-```{r}
+```{r plot-shannon}
 #Seperate by both spike and time using metadata
 
-#order_of_samples = data.frame(name=c("ABT1", "ABT2", "ABT3", "ABT4" , "ABT5" ,"ABT6" ,"ABT1", "ABT2" ,
- #                                    "ABT3","ABT5", "ABT6" ,"ABT1", "ABT2", "ABT3",
-  #                                   "ABT5", "ABT6" ,"FeT1","FeT2" ,"FeT3" ,"FeT4",
-   #                                  "FeT5" ,"FeT6" ,"FeT4", "FeT1" ,"FeT2" ,"FeT3" ,
-    #                               "FeT5" ,"FeT6", "FeT1" ,"FeT2" ,"FeT3", "FeT4" ,
-     #                                "FeT5", "FeT6" ,"NLT1", "NLT2", "NLT3", "NLT4",
-      #                               "NLT5", "NLT6" ,"NLT1", "NLT2" ,"NLT3" ,"NLT4",
-       #                              "NLT5" ,"NLT6", "NLT1", "NLT2" ,"NLT3", "NLT4" ,
-        #                             "NLT5" ,"NLT6" ,"ST1" , "ST2" , "ST3" , "ST4",
-         #                            "ST5" , "ST6" , "ST1" , "ST2" , "ST3" , "ST4" , 
-          #                           "ST5",  "ST6",  "ST1" , "ST2",  "ST3",  "ST4", 
-           #                          "ST5" , "ST6"))
-
-#ignore, but I'm keeping the order just in case!! 
-
-as.factor(div.df$spike_time)
-
-div.df$spike_time = factor(div.df$spike_time, levels = c("ABT1", "ABT2", "ABT3", "ABT4" , "ABT5" ,"ABT6", "FeT1","FeT2" ,"FeT3" ,"FeT4", "FeT5" ,"FeT6", "NLT1", "NLT2", "NLT3", "NLT4", "NLT5", "NLT6", "ST1" , "ST2",  "ST3",  "ST4", "ST5" , "ST6"))
 
 
 p_div_1 <- ggboxplot(div.df, 
@@ -393,9 +502,16 @@ print(p_div_1)
 
 #THAT WORKED, IT'S ORDERED NOW!! ONLY TOOK 1 HOUR TO FIGURE OUT. 
 
-
 ```
 
+```{r faceted-shannon-plot}
+
+div.df %>%
+  group_by(spike) %>% 
+  summarize(avg_simp = mean(diversity_shannon))
+
+
+```
 
 
 simpson boxplots (non vst)
@@ -415,113 +531,20 @@ print(p_even)
 
 
 
-Shannon and Simpson (vst)
-```{r}
+Shannon and Simpson 
+```{r diversity-with-phyloseq-package}
 
+Shannon_plot <- 
+  plot_richness(ps_all, x="sample", measures=c("Shannon"), color="spike")
 
-Shannon_plot = plot_richness(vst_all.ordered, x="spike_time", measures=c("Shannon"), color="spike")
 Shannon_plot + scale_color_manual(values= exper_colors) 
 
+Simpson_plot = plot_richness(ps_all, x="spike_time", measures=c("Simpson"), color="spike")
 
-
-
-
-Simpson_plot = plot_richness(vst_all, x="spike_time", measures=c("Simpson"), color="spike")
 Simpson_plot  + scale_color_manual(values= exper_colors)
 ```
 
 
-Phylogenetic diversity using the Picante packate 
-https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/alpha-diversities.html#phylogenetic-diversity
-all of my diveristy measures were the same, I give up on this for now
-```{r, include=FALSE}
-
-library(picante)
-
-vst_all_asvtab = as.data.frame(vst_all@otu_table) #otu tab as a data frame
-view(vst_all_asvtab)
-
-vst_all_tree = vst_all@phy_tree #seperating the phylogenetic tree 
-
-
-# We first need to check if the tree is rooted or not 
-
-vst_all@phy_tree #unrooted tree 
-
-#df.pd <- pd(t(vst_all_asvtab), vst_all_tree, include.root=T) # t(ou_table) transposes the table for use in picante and the tre file comes from the first code chunck we used to read tree file 
-
-#need to root the tree, using joey711/phyloseq comment from Feb 28, 2018, issue #597 
-#https://github.com/joey711/phyloseq/issues/597
-
-pick_new_outgroup <- function(tree.unrooted){
-    require("magrittr")
-    require("data.table")
-    require("ape") # ape::Ntip
-    # tablify parts of tree that we need.
-    treeDT <- 
-      cbind(
-        data.table(tree.unrooted$edge),
-        data.table(length = tree.unrooted$edge.length)
-      )[1:Ntip(tree.unrooted)] %>% 
-      cbind(data.table(id = tree.unrooted$tip.label))
-    # Take the longest terminal branch as outgroup
-    new.outgroup <- treeDT[which.max(length)]$id
-    return(new.outgroup)
-}
-
-
-#It returns the string of the tip-label for the new proposed outgroup. It is then up to the user/process to take that result and do the next rooting step. This is a bit easier to test and maintain than also doing the rooting and opaquely returning the tree.
-
-new.outgroup = pick_new_outgroup(vst_all_tree)
-rootedTree= ape::root(vst_all_tree, outgroup=new.outgroup, resolve.root=TRUE)
-
-rootedTree_vst_all = rootedTree
-rootedTree_vst_all
-
-
-#try again to the the phylogentic diversity 
-
-#df.pd <- pd(t(vst_all_asvtab), rootedTree,include.root=T)
-## Error in UseMethod("is.rooted") : no applicable method for 'is.rooted' applied to an object of class "NULL"
-
-#okay I'll try to make my phyloseq object again with the rooted tree and then repeat 
-
-
-my_vst_physeqobj_rooted = phyloseq(seq_count_phy2, Metadata_tab_phy2, tax_tab_phy2, phy_tree(rootedTree))
-
-my_vst_physeqobj_full_time_rooted = subset_samples(my_vst_physeqobj_rooted, bottle!="NL1" &  bottle!="NL2"& bottle!="NL3")
-
-vst_all_rooted = my_vst_physeqobj_full_time_rooted #just renaming it to be a simplier name
- vst_all@sam_data[["bottle"]] #just to check 
- 
-vst_all_rooted_asvtab = as.data.frame(vst_all_rooted@otu_table)
-vst_all_rooted_tree = vst_all_rooted@phy_tree
-
-
-#df.pd = pd(vst_all_rooted_asvtab, vst_all_rooted_tree) #all i needed to do was NOT transpose the tree like they suggested. ugh.
-#datatable(df.pd) #why is pd all the same? 
-
-#let's try transposing first and then doing the df.pd
-vst_all_rooted_asvtab.t = t(vst_all_rooted_asvtab)
-
-df.pd = pd(vst_all_rooted_asvtab.t, vst_all_rooted_tree)
-
-vst_all_rooted_asvtab.t
-
-
-# get the metadata out as seprate object
-vst_meta <- meta(vst_all_rooted)
-
-
-vst_meta$Phylogenetic_Diversity = df.pd$PD #added the phylogenetic diversity results to the vst_metadata
-
-view(vst_meta)
-
-
-
-
-
-```
 
 
 
@@ -530,215 +553,27 @@ view(vst_meta)
 
 #0.3]taxa glom
 ```{r}
-#summes all ASVs that were in the same level
-
-#Glom at famiily level 
-vst_all_rel_glom = tax_glom(vst_all_rel_1, taxrank = "Family")
-vst_all_rel_glom_family = vst_all_rel_glom
-
-#Glom at phylum level 
-vst_all_rel_glom_phylum = tax_glom(vst_all_rel_1, taxrank= "Phylum")
-
-
-
-```
-
-
-#C-1] Boxplots 
-```{r}
-
-#Phylum level box plot 
-
-vst_all_rel_glom2 = tax_glom(vst_all_rel_1, taxrank = "Phylum")
-
-dat_vst_all_rel2 = data.table(psmelt(vst_all_rel_glom2))
-dat_vst_all_rel2$Phylum <- as.character(dat_vst_all_rel2$Phylum)
-dat_vst_all_rel2$Order = as.character(dat_vst_all_rel2$Order)
-dat_vst_all_rel2$Family = as.character(dat_vst_all_rel2$Family)
-
-# group dataframe by Family, calculate median rel. abundance
-dat_vst_all_rel2[, median := median(Abundance, na.rm = TRUE), 
-    by = "Phylum"]
-# Change name to remainder of Family less than .1%
-dat_vst_all_rel2[(median <= 0.001), Phylum := " Other < .1%"]
-
-
-boxplot_Phylum = ggplot(dat_vst_all_rel2[Abundance > 0],
-       aes(x=Phylum,
-           y=Abundance)) + 
-  geom_boxplot() + 
-  coord_flip() +
-  scale_y_log10()+ labs(title="Phylum")
-boxplot_Phylum
-
-
-#Family level box plot
-
-vst_all_rel_glom = tax_glom(vst_all_rel_1, taxrank = "Family")
-
-dat_vst_all_rel = data.table(psmelt(vst_all_rel_glom))
-dat_vst_all_rel$Phylum <- as.character(dat_vst_all_rel$Phylum)
-dat_vst_all_rel$Order = as.character(dat_vst_all_rel$Order)
-dat_vst_all_rel$Family = as.character(dat_vst_all_rel$Family)
-
-# group dataframe by Family, calculate median rel. abundance
-dat_vst_all_rel[, median := median(Abundance, na.rm = TRUE), 
-    by = "Family"]
-# Change name to remainder of Family less than 5%
-dat_vst_all_rel[(median <= 0.01), Family := " Other < 1%"]
-
-
-boxplot_Family = ggplot(dat_vst_all_rel[Abundance > 0],
-       aes(x=Family,
-           y=Abundance)) + 
-  geom_boxplot() + 
-  coord_flip() +
-  scale_y_log10()+ labs(title="Family")
-boxplot_Family
-
-
-
-#genus level boxplot
-vst_all_rel_glom_genus = tax_glom(vst_all_rel_1, taxrank = "Genus")
-
-dat_vst_all_rel_genus = data.table(psmelt(vst_all_rel_glom_genus)) #make a data table with the agg taxa at genus level 
-dat_vst_all_rel_genus$Phylum <- as.character(dat_vst_all_rel_genus$Phylum)
-dat_vst_all_rel_genus$Order = as.character(dat_vst_all_rel_genus$Order)
-dat_vst_all_rel_genus$Family = as.character(dat_vst_all_rel_genus$Family)
-dat_vst_all_rel_genus$Genus = as.character(dat_vst_all_rel_genus$Genus)
-
-
-
-# group dataframe by Genus, calculate median rel. abundance
-dat_vst_all_rel_genus[, median := median(Abundance, na.rm = TRUE), 
-    by = "Genus"]
-# Change name to remainder of Family less than 1%
-dat_vst_all_rel_genus[(median <= 0.01), Genus := " Other < 1%"]
-
-
-boxplot_genus = ggplot(dat_vst_all_rel_genus[Abundance > 0],
-       aes(x=Genus,
-           y=Abundance)) + 
-  geom_boxplot() + 
-  coord_flip() +
-  scale_y_log10()+ labs(title="Genus")
-boxplot_genus
+# #summes all ASVs that were in the same level
+# 
+# #Glom at famiily level 
+# vst_all_rel_glom = tax_glom(vst_all_rel_1, taxrank = "Family")
+# vst_all_rel_glom_family = vst_all_rel_glom
+# 
+# #Glom at phylum level 
+# vst_all_rel_glom_phylum = tax_glom(vst_all_rel_1, taxrank= "Phylum")
+# 
 
 
 ```
+
+
+
+
 
 #C-1-1] Arrange boxplots in a grid together
 ```{r}
-ggarrange(boxplot_Phylum, boxplot_Family, nrow=1)
-boxplot_genus
-
-```
-
-#0.4] Make a dataframe from a phyloseq object
-```{r}
-
-dat_family = data.table(psmelt(vst_all_rel_glom_family))
-# convert Phylum to a character vector from a factor because R
-dat_family$Phylum <- as.character(dat$Phylum)
-dat_family$Order = as.character(dat$Order)
-dat_family$Family = as.character(dat$Family)
-
-# group dataframe by Family, calculate median rel. abundance
-dat_family[, median := median(Abundance, na.rm = TRUE), 
-    by = "Family"]
-# Change name to remainder of Family less than 1%
-dat_family[(median <= 0.01), Family := " Other < 1%"]
-```
-
-
-#C-2] Barcharts 
-phylum
-```{r}
-
-# Create a data table for ggplot
-vst_all_phylum <- vst_all %>%
-  tax_glom(taxrank = "Phylum") %>%                     # agglomerate at phylum level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance (or use ps0.ra)
-  psmelt() %>%                                         # Melt to long format for easy ggploting
-  filter(Abundance > 0.01)                             # Filter out low abundance taxa
-
-# Plot - Phylum
-p.ra.phylum <- ggplot(vst_all_phylum, aes(x = spike_time, y = Abundance, fill = Phylum)) + 
-  geom_bar(stat = "identity", width = 1) +
-  facet_wrap(spike~spike_time, scales = "free_x", nrow = 4, ncol = 7) +
-  theme(axis.text.x = element_blank()) +
-  theme(axis.title.x = element_blank()) +
-  labs(title = "Abundant Phylum (> 1%)")
-p.ra.phylum
-
-
-# Create a data table for ggplot
-vst_all_phylum <- vst_all %>%
-  tax_glom(taxrank = "Phylum") %>%                     # agglomerate at phylum level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance (or use ps0.ra)
-  psmelt() %>%                                         # Melt to long format for easy ggploting
-  filter(Abundance > 0.01)                             # Filter out low abundance taxa
-
-# Plot - Phylum
-p.ra.phylum <- ggplot(vst_all_phylum, aes(x = sample_time, y = Abundance, fill = Phylum)) + 
-  geom_bar(stat = "identity", width = 1) +
-  labs(title = "Abundant Phylum (> 1%)")
-p.ra.phylum
-
-mean(vst_all_phylum$Abundance~sample_time)
-
-abundance_by_time = vst_all_phylum %>% group_by(sample_time)
-levels(abundance_by_time$sample_time)
-as.factor(abundance_by_time$sample_time)
-
-rel_abundance_T1 = vst_all_phylum %>% subset(sample_time == "T1")
-
-
-
-
-```
-Genus
-```{r}
-# Create a data table for ggplot
-vst_all_genus <- vst_all %>%
-  tax_glom(taxrank = "Genus") %>%                     # agglomerate at phylum level
-  psmelt()                                        # Melt to long format for easy ggploting
-     
-  
-vst_all_genus_rel <- vst_all %>%
-  tax_glom(taxrank="Genus") %>%
-  transform_sample_counts(function(x) {x/sum(x)}) %>% # Transform to rel
-  psmelt()
-                                        
-  
-vst_all_genus$relative_abundance = vst_all_genus_rel$Abundance
-
-vst_all_genus_filt = vst_all_genus %>%filter(relative_abundance>0.01)
-vst_all_genus_filt_5 = vst_all_genus %>%filter(relative_abundance>0.05)
-
-
-
-# Plot - Genus
-p.ra.genus <- ggplot(vst_all_genus_filt_5, aes(x = sample_time, y = Abundance, fill = Genus)) + 
-  geom_bar(aes(color=Genus, fill=Genus), stat = "identity", width = 1) +
-  labs(title = "Abundant Genus ( >5 %)", x = "Sample Time")
-p.ra.genus
-
-
-# Plot - Genus
-p.ra.genus_2 <- ggplot(vst_all_genus_filt_5, aes(x = spike, y = Abundance, fill = Genus)) + 
-  geom_bar(aes(color=Genus, fill=Genus), stat = "identity", width = 1) +
-  labs(title = "Abundant Genus (>5 %)", x="Spike")
-p.ra.genus_2
-
-#plot genus 
-
-p.ra.genus_3 <- ggplot(vst_all_genus_filt, aes(x = bottle , y = relative_abundance, fill = Genus)) +
-  geom_bar(aes(color=Genus, fill=Genus), stat = "identity", width = 1) +
-  labs(title = "Abundant Genus (>1 %)", x="Spike")+
-  facet_wrap(sample_time~spike, scales="free_x", nrow=4)
-p.ra.genus_3
-
+# ggarrange(boxplot_Phylum, boxplot_Family, nrow=1)
+# boxplot_genus
 
 ```
 

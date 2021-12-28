@@ -142,6 +142,9 @@ colnames(tax_table(vst_killed))
 
 
 
+
+
+
 # Evaluating Data 
 
 There are several possible ways to evaluate the data, but a standard approach consists of the following

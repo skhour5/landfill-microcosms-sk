@@ -455,6 +455,7 @@ ps_Fe = phyloseq(otu_table(nochim_seqtab.Fe, taxa_are_rows = FALSE), sample_data
 
 
 
+
 ##### MAKING FIGURES #######
 #BAR PLOTS TRIAL ONE: IGNORE THIS ONE#####
 #Make Bar plot#

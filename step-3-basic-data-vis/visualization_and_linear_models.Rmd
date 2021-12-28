@@ -69,8 +69,6 @@ ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/
 
 ```
 
-
-
 In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
 ```{r define-calc-prop}
 
@@ -99,6 +97,9 @@ I don't think I need this anymore because I already re-leveled the spikes in ste
 #   mutate(spike = fct_relevel(spike, "Control ", "Antibiotics", "Fe(OH)3", "Na2SO4"))
 
 ```
+
+
+
 
 ## Exploratory Visualization
 

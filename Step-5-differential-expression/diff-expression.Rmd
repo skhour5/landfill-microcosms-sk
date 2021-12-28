@@ -9,22 +9,92 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r load-physeq-objects-from-step4}
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+ps_all <- readRDS( "~/landfill-microcosms/data/live_samples_objects/ps_all.step4")
+vst_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all.step4")
 
-```{r cars}
-summary(cars)
+
+ps_killed.rmt7 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmt7")
+vst_killed.rmt7<- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.rmt7")
+
+ps_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.step4")
+vst_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.step4")
+
+
+
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r load-packages}
+library(DESeq2)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r psmelt}
+ps_all.df <- psmelt(ps_all)
+
+```
+
+
+## DESEQ2 
+
+```{r subset-each-spike}
+
+antibiotics <- ps_all %>% 
+  subset_samples(
+    spike == "Antibiotics", 
+  )
+
+antibiotics <- antibiotics %>% 
+  subset_samples(sample_time %in% c("T3",  "T6"))
+
+sample_data(antibiotics)
+
+```
+
+
+
+```{r run-DESEQ}
+
+levels(sample_data(antibiotics)$treatment)
+
+ds_antibiotics <- phyloseq_to_deseq2(antibiotics, ~ treatment)
+
+dds_antibiotics <- DESeq(ds_antibiotics, test = "Wald")
+
+```
+
+
+```{r results}
+
+res_ab <- results(dds_antibiotics, cooksCutoff = F)
+alpha = 0.05 
+
+sigtab <- res_ab[which(res_ab$padj < alpha), ]
+
+sigtab <- cbind(as(sigtab, "data.frame"), as(tax_table(antibiotics)[rownames(sigtab), ], "matrix"))
+
+head(sigtab)
+
+
+```
+```{r check-Rummeliibacillus}
+
+ps_all.df %>% 
+  filter(spike == "Antibiotics", 
+         Genus == "Rummeliibacillus") %>% 
+  ggplot(aes(sample_time, Abundance)) +
+  geom_point()
+
+
+```
+```{r}
+
+ps_all.df %>% 
+  filter(spike == "Antibiotics", 
+         Class == "Clostridia") %>% 
+  ggplot(aes(sample_time, Abundance)) +
+  geom_point()
+
+```
+

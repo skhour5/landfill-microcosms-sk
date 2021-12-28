@@ -482,9 +482,8 @@ div.df$spike_time = factor(div.df$spike_time, levels = c("ABT1", "ABT2", "ABT3",
 
 ```
 
-
 shannon phylogenetic diversity w/re-ordered samples (non vst)
-```{r plot-shannon}
+```{r plot-shannon-2}
 #Seperate by both spike and time using metadata
 
 
@@ -554,7 +553,6 @@ Simpson_plot = plot_richness(ps_all, x="spike_time", measures=c("Simpson"), colo
 
 Simpson_plot  + scale_color_manual(values= exper_colors)
 ```
-
 
 taxa glom
 ```{r}

@@ -5,10 +5,11 @@ date: "12/22/2021"
 output: html_document
 ---
 
+## Pre-processing
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
 
 ```{r load-physeq-objects-from-step4}
 
@@ -28,6 +29,30 @@ vst_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_
 
 ```{r load-packages}
 library(DESeq2)
+library(ggplot2)
+library(gridExtra)
+library(phyloseq)
+require("tidyverse")
+library("dplyr")
+library("rmarkdown")
+library("vegan")
+library("PoiClaClu")
+library("doParallel")
+library("plotly")
+library("microbiome")
+library("ggpubr")
+library("viridis")
+library("plyr")
+library("magrittr")
+library("scales")
+library(microbiome) # data analysis and visualisation
+library(phyloseq) # also the basis of data object. Data analysis and visualisation
+library(RColorBrewer) # nice color options
+library(ggpubr) # publication quality figures, based on ggplot2
+library(DT) # interactive tables in html and markdown
+library(dplyr) # data handling  
+library(data.table)
+
 ```
 
 ```{r psmelt}
@@ -36,9 +61,70 @@ ps_all.df <- psmelt(ps_all)
 ```
 
 
+```{r make-count-tables, eval = FALSE}
+
+# seqtab.ps_all <- ps_all@otu_table #extract the seq tab
+# metadata.ps_all <- ps_all@sam_data #extract the metadata table
+# tax_tab.ps_all <- ps_all@tax_table
+# 
+# 
+# #Give our seq headers more manageable names (ASV_1, ASV_2...) 
+# asv_seqs <- colnames(seqtab.ps_all)
+# asv_headers <- vector(dim(seqtab.ps_all)[2], mode="character")
+# 
+# for (i in 1:dim(seqtab.ps_all)[2]) {
+#   asv_headers[i] <- paste(">ASV", i, sep="_")
+# }
+# 
+# 
+# 
+# # making and writing out a fasta of our final ASV seqs:
+# asv_fasta <- c(rbind(asv_headers, asv_seqs))
+# write(asv_fasta, "ASVs.fa")
+# asv_tab <- t(seqtab.ps_all)  #transpose seq tab
+# row.names(asv_tab) <- sub(">", "", asv_headers)
+# write.table(asv_tab, "ASVs_counts.tsv", sep="\t", quote=F, col.names=NA)
+# # count_tab will hold the ASV and sample names
+# count_tab <- read.table("ASVs_counts.tsv", header=T, row.names=1,
+#                         check.names=F, sep="\t")
+# 
+# 
+# 
+# # creating table of taxonomy [and setting any that are unclassified as "NA"...]
+# write.table(tax_tab.ps_all, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
+# # tax_tab will hold the ASVs and the taxa that go with them.
+# tax_tab <- as.matrix(read.table("ASVs_taxonomy.tsv", header=T,
+#                                 row.names=1, check.names=F, sep="\t"))
+# 
+# 
+# #check to see if these look reasonable. Note, if you have a lot of data, use 'head'
+# head(count_tab)
+# head(tax_tab)
+# #At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
+# #At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV.
+# 
+# # If your count_tab does NOT have the sample names in the rows, then you need to fix that.
+# #The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows).
+# #I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
+# 
+# count_tab_t <- t(count_tab)
+# tax_tab_t <- t(tax_tab)
+# 
+# #They should now both have the sample name.fastq on the rows in these version of the tables.
+# #It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
+# 
+# 
+
+```
+
+
+
 ## DESEQ2 
 
-```{r subset-each-spike}
+### Antibiotics
+
+
+```{r AB-subset}
 
 antibiotics <- ps_all %>% 
   subset_samples(
@@ -50,11 +136,14 @@ antibiotics <- antibiotics %>%
 
 sample_data(antibiotics)
 
+
+
+
+
 ```
 
 
-
-```{r run-DESEQ}
+```{r run-DESEQ-antibiotics}
 
 levels(sample_data(antibiotics)$treatment)
 
@@ -65,7 +154,7 @@ dds_antibiotics <- DESeq(ds_antibiotics, test = "Wald")
 ```
 
 
-```{r results}
+```{r results-antibiotics}
 
 res_ab <- results(dds_antibiotics, cooksCutoff = F)
 alpha = 0.05 
@@ -78,7 +167,8 @@ head(sigtab)
 
 
 ```
-```{r check-Rummeliibacillus}
+
+```{r check-Rummeliibacillus-AB}
 
 ps_all.df %>% 
   filter(spike == "Antibiotics", 
@@ -88,7 +178,9 @@ ps_all.df %>%
 
 
 ```
-```{r}
+
+
+```{r check-Clostridia-AB}
 
 ps_all.df %>% 
   filter(spike == "Antibiotics", 
@@ -98,3 +190,164 @@ ps_all.df %>%
 
 ```
 
+
+### Iron 
+
+```{r iron-subset}
+
+
+iron <- ps_all %>% 
+  subset_samples(
+    spike == "Fe(OH)3")
+
+iron <- iron %>% 
+  subset_samples(
+    sample_time %in% c("T4", "T5"))
+
+sample_data(iron)
+
+
+```
+
+```{r DESEQ-iron}
+
+levels(sample_data(iron)$treatment)
+
+ds_iron <- phyloseq_to_deseq2(iron, ~ treatment)
+
+dds_iron <- DESeq(ds_iron, test = "Wald")
+
+```
+
+```{r results-iron}
+
+res_fe <- results(dds_iron, cooksCutoff = F)
+alpha = 0.05 
+
+sigtab_fe <- res_fe[which(res_fe$padj < alpha), ]
+
+sigtab_fe <- cbind(as(sigtab_fe, "data.frame"),
+                   as(tax_table(iron)
+                      [rownames(sigtab_fe), ], "matrix"))
+
+head(sigtab_fe)
+
+
+```
+
+```{r check-Rummeliibacillus-fe}
+
+ps_all.df %>% 
+  filter(spike == "Fe(OH)3", 
+         Genus == "Rummeliibacillus") %>% 
+  ggplot(aes(sample_time, Abundance)) + 
+  geom_point()
+  
+  
+
+
+```
+
+```{r check-genus-fe}
+
+ps_all.df %>% 
+  filter(spike == "Fe(OH)3", 
+         Genus == "Alicyclobacillus") %>% 
+  ggplot(aes(sample_time, Abundance)) + 
+  geom_point()
+
+
+  
+```
+
+```{r check-genus-fe-2}
+
+ps_all.df %>% 
+  filter(spike == "Fe(OH)3", 
+         Genus == "Aeribacillus") %>% 
+  ggplot(aes(sample_time, Abundance)) + 
+  geom_point()
+
+
+```
+
+
+### Sulfate 
+
+```{r S-subset}
+
+
+so4 <- ps_all %>% 
+  subset_samples(
+    spike == "Na2SO4")
+
+so4 <- so4 %>% 
+  subset_samples(
+    sample_time %in% c("T4", "T5"))
+
+sample_data(so4)
+
+
+```
+
+```{r DESEQ-S}
+
+levels(sample_data(so4)$treatment)
+
+ds_S <- phyloseq_to_deseq2(so4, ~ treatment)
+
+dds_S <- DESeq(ds_S, test = "Wald")
+
+```
+
+```{r results-S}
+
+res_S <- results(dds_S, cooksCutoff = F)
+alpha = 0.05 
+
+sigtab_S <- res_S[which(res_S$padj < alpha), ]
+
+# sigtab_S <- cbind(as(sigtab_S, "data.frame"),
+#                    as(tax_table(so4)
+#                       [rownames(sigtab_S), ], "matrix"))
+
+head(sigtab_S)
+
+
+```
+No significant changes 
+
+
+### Control 
+```{r control-subset}
+
+control <- ps_all %>% 
+  subset_samples(
+    spike == "Control")
+
+sample_data(control)$sample_time <- as.factor(sample_data(control)$sample_time)
+
+sample_data(control)
+
+
+```
+
+```{r DESEQ-control}
+
+levels(sample_data(control)$sample_time)
+
+ds_cnt <- phyloseq_to_deseq2(control, ~ sample_time)
+
+dds_cnt <- DESeq(ds_cnt, test = "Wald")
+
+```
+
+```{r results-cnt}
+res_cnt <- results(dds_cnt, cooksCutoff = F)
+alpha = 0.05 
+sigtab_cnt <- res_cnt[which(res_cnt$padj < alpha), ]
+sigtab_cnt <- cbind(as(sigtab_cnt, "data.frame"), 
+                    as(tax_table(control)[rownames(sigtab_cnt), ], "matrix"))
+
+
+```

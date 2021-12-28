@@ -398,6 +398,7 @@ The rownames of the seqtab should be identical to the rownames of the metadata, 
 
 ### Step 10: Variance stablilizing transformation
 
+Turns out this is useful down the line
 ```{r make-count-tables, eval = FALSE}
 
 

@@ -362,7 +362,7 @@ nmds_bray_vst_killed.plot.rmt7 #print the plot
 
 PCoA_wunifrac_vst_killed <-  phyloseq::ordinate(vst_killed.rmt7, method="PCoA", distance = "wunifrac")
 
-PCoA_wunifrac_vst_all_killed.plot  <-Ω`cPCoA_wunifrac_vst_all_killed.plotvv
+PCoA_wunifrac_vst_all_killed.plot  <-
   plot_ordination(vst_killed.rmt7 , PCoA_wunifrac_vst_killed, color = "treatment", shape ="sample_time", title = "wUnifrac PCoA killed") +
   geom_point(size=3.5) +
   scale_color_manual(values= exper_colors)
@@ -567,6 +567,21 @@ taxa glom
 # #Glom at phylum level 
 # vst_all_rel_glom_phylum = tax_glom(vst_all_rel_1, taxrank= "Phylum")
 # 
+
+
+```
+
+```{r save-physeq-objects-madehere}
+
+saveRDS(ps_all, "~/landfill-microcosms/data/live_samples_objects/ps_all.step4")
+saveRDS(vst_all, "~/landfill-microcosms/data/live_samples_objects/vst_all.step4")
+
+
+saveRDS(ps_killed.rmt7, "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmt7")
+saveRDS(vst_killed.rmt7, "~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.rmt7")
+
+saveRDS(ps_killed, "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.step4")
+saveRDS(vst_killed, "~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.step4")
 
 
 ```

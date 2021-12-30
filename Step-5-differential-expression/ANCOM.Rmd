@@ -5,118 +5,162 @@ date: "12/28/2021"
 output: html_document
 ---
 
+(Kaul et al., 2017)
+https://www.frontiersin.org/articles/10.3389/fmicb.2017.02114/full
+
+https://www.youtube.com/watch?v=A6o2nOnDsJU&t=1040s
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## ANCOM
-(Kaul et al., 2017)
-https://www.frontiersin.org/articles/10.3389/fmicb.2017.02114/full
 
-
-The function rel_ancom defined in the file “rel_ancom.R”" relies on a series of internal functions
-normalizer_gm, normalizer_ref, pop_detect, reset_dat_missing and struc_zero defined in the files,
-geom_ref.R, pop_detect.R, stepA2.R and step A1.R respectively. All these files, along with the sample
-data “otu.csv” and “meta.csv” should be stored in the working directory before proceeding. The analysis can
-be then be implemented as follows.
-```{r load-ANCOM}
-
-source("rel_ancom.R")
-
-```
-Input data according to the format used in the sample data files provided along with the R script. Specifically,
-one needs to provide two .csv files. 
-The first containing the OTU counts data where one column is the “Sample.ID” and the all other columns are OTU counts corresponding to each id in the Sample ID column.
-
-The second file is the metadata file, where, again one column is the “Sample.ID” and the others contain
-various variables corresponding to each id, including the experimental group/population the id belongs to.
-For illustration purposes we are providing the publicly available microbiome data of Yatsunenko et al. (2012).
-```{r make-csv-files}
-
-seqtab.ps_all <- ps_all@otu_table #extract the seq tab
-metadata.ps_all <- ps_all@sam_data #extract the metadata table
-
-otu_counts <- as.data.frame(seqtab.ps_all)
-
-otu_counts <- otu_counts %>% 
-  mutate(Sample.ID = rownames(otu_counts))
-
-otu_counts$Sample.ID #check the new column was added 
-
-write_csv(otu_counts,"otu_counts.csv")
-
-otu <- read.csv("otu_counts.csv", skip = 1)  #this is the first file needed
-
-meta <- as.data.frame(metadata.ps_all)
-
-meta$Sample.ID <- meta$sample #this is the second file needed
-
-identical(meta$Sample.ID, otu$Sample.ID) #should be true 
-
-write_csv(meta, "meta.csv")
-
-meta <- read.csv("meta.csv")
-
-```
-
-```{r run_ancom}
-
-rel_ancom(OTUdat = otu, Vardat = meta, main.var = "treatment")
-
-```
-
-
-
-
-#ANCOM v2
-https://github.com/FrederickHuangLin/ANCOM
-
-```{r}
+```{r load-packages, message=FALSE}
 library(nlme)
 library(tidyverse)
 library(ggplot2)
 library(compositions)
+source("scripts/ancom_v2.1.R")
 library(readr)
 library(tidyverse)
-```
-
-
-```{r load-ancomv2}
-
-source("scripts/ancom_v2.1.R")
 
 ```
 
-```{r step1-datapreprocessing}
+#ANCOM
 
-feature_table = otu; sample_var = "Sample.ID"; group_var = NULL
 
+```{r load-phyloseq-objects}
+ps_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.step2") 
+
+```
+
+
+```{r make-inputfiles-otu-tbl}
+
+seqtab.ps_all <- ps_all@otu_table #extract the seq tab
+metadata.ps_all <- ps_all@sam_data #extract the metadata table
+
+otu_live <- as.data.frame(seqtab.ps_all)
+otu_live.t <- t(otu_live) #this looks identical to otu_data from the example
+
+write.csv(otu_live.t, "otu.live.t.csv")
+
+otu_tble <- read.csv("otu.live.t.csv")
+
+seqs <- otu_tble$X
+
+rownames(otu_tble) = seqs
+
+otu_tble <- otu_tble[,-1] #delete first column which is now unnesseary 
+ 
+
+```
+
+```{r metadata}
+
+meta <- as.data.frame(metadata.ps_all)
+write.csv(meta, "meta_live.csv")
+meta_live <- read.csv("meta_live.csv")
+
+
+meta_live <- meta_live %>% 
+  dplyr::rename(Sample.ID = sample)
+
+meta_live <- meta_live[, -1]
+
+#add treatment variable
+meta_live <- meta_live %>% 
+  mutate(treatment =  #add a new column of data which specifies whether the samples have ACTUALLY been treated with a spike
+           case_when(sample_time == "T1" ~ "None", 
+                     sample_time == "T2" ~ "None", 
+                    sample_time == "T3" ~ "None", 
+                        sample_time == "T4" ~ "None", 
+                        sample_time == "T5" ~ as.character(spike), 
+                    sample_time == "T6" ~ as.character(spike))) 
+
+
+
+```
+
+
+## Step 1: Data preprocessing
+
+
+```{r}
+
+feature_table = otu_tble; sample_var = "Sample.ID"; group_var = NULL
 out_cut = 0.05; zero_cut = 0.90; lib_cut = 1000; neg_lb = FALSE
-
-prepro = feature_table_pre_process(feature_table, meta, sample_var, group_var, 
+prepro = feature_table_pre_process(feature_table, meta_live, sample_var, group_var, 
                                    out_cut, zero_cut, lib_cut, neg_lb)
-
 feature_table = prepro$feature_table # Preprocessed feature table
-
-meta_data = prepro$meta # Preprocessed metadata
-
+meta_data = prepro$meta_data # Preprocessed metadata
 struc_zero = prepro$structure_zeros # Structural zero info
 
+
 ```
 
-```{r step2}
+
+
+## Step 2: ANCOM
+
+```{r}
 
 main_var = "treatment"; p_adj_method = "BH"; alpha = 0.05
 adj_formula = NULL; rand_formula = NULL
 t_start = Sys.time()
 
-res = ANCOM(feature_table = otu, meta_data = meta, main_var = "treatment")
-
+res = ANCOM(feature_table, meta_data, struc_zero, main_var, p_adj_method, 
+            alpha, adj_formula, rand_formula)
 t_end = Sys.time()
 t_run = t_end - t_start # around 30s
 
-write_csv(res$out, "outputs/res_moving_pics.csv")
+write_csv(res$out, "res_full_time.csv")
 
 ```
+
+
+
+## Step 3: Volcano Plot
+
+```{r}
+
+# Number of taxa except structural zeros
+n_taxa = ifelse(is.null(struc_zero), nrow(feature_table), sum(apply(struc_zero, 1, sum) == 0))
+# Cutoff values for declaring differentially abundant taxa
+cut_off = c(0.9 * (n_taxa -1), 0.8 * (n_taxa -1), 0.7 * (n_taxa -1), 0.6 * (n_taxa -1))
+names(cut_off) = c("detected_0.9", "detected_0.8", "detected_0.7", "detected_0.6")
+
+# Annotation data
+dat_ann = data.frame(x = min(res$fig$data$x), y = cut_off["detected_0.7"], label = "W[0.7]")
+
+fig = res$fig +  
+  geom_hline(yintercept = cut_off["detected_0.7"], linetype = "dashed") + 
+  geom_text(data = dat_ann, aes(x = x, y = y, label = label), 
+            size = 4, vjust = -0.5, hjust = 0, color = "orange", parse = TRUE)
+fig  
+
+
+
+```
+
+
+How do we find out which features correspond to which taxa?
+```{r}
+
+taxatable <- ps_all@tax_table
+taxatable <- as.data.frame(taxatable)
+
+taxatable <- taxatable %>% 
+  mutate(taxa_id = rownames(taxatable))
+
+ancom_res_ps_all  <- full_join(ancom_res_ps_all, taxatable, by = "taxa_id")
+
+```
+
+
+
+
+
 
 

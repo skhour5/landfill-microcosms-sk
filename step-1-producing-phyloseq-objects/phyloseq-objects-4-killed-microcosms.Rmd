@@ -352,11 +352,36 @@ deseq_counts_vst.k <- varianceStabilizingTransformation(deseq_counts.k)
 
 vst_trans_count_tab_killed <- assay(deseq_counts_vst.k) # so this is a transformed table 
 
+saveRDS(vst_trans_count_tab_killed, "~/landfill-microcosms/data/killed_microcosms_objects/vst_trans_count_tab_killed")
+
 ```
 
 
 
+
 Step 11:Make phyloseq objects
+
+```{r objects-needed-for-physeq}
+
+nochim_seqtab_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/nochim_seqtab_killed")
+taxid_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/taxid_killed")
+
+```
+
+```{r re-load-metadata-killed, eval = FALSE}
+
+killed_metadata = read.csv("~/landfill-microcosms/data/metadata/killed_metadata.csv")
+
+#killed 
+all(rownames(nochim_seqtab_killed) %in% killed_metadata$sample)
+rownames(killed_metadata) = killed_metadata$sample
+rownames(nochim_seqtab_killed) =c("ABK1",   "ABK1.1", "ABK1.2", "ABK1.3" ,"ABK1.4", "ABK1.5", "ABK1.6" ,"ABK2" ,  "ABK2.1", "ABK2.2", "ABK2.3" ,"ABK2.4" ,"ABK2.5", "ABK2.6", "ABK3",   "ABK3.1", "ABK3.2", "ABK3.3", "ABK3.4" ,"ABK3.5", "ABK3.6", "FeK1"  , "FeK1.1", "FeK1.2", "FeK1.3", "FeK1.4" ,"FeK1.5", "FeK1.6", "FeK2" ,  "FeK2.1", "FeK2.2" ,"FeK2.3" ,"feK2" ,  "FeK2.4" ,"FeK2.5", "FeK3", "FeK3.1", "FeK3.2" ,"FeK3.3", "FeK3.4" , "FeK3.5" ,"FeK3.6" ,"NK1"  ,  "NK1.1" , "NK1.2" , "NK1.3",  "NK2" ,   "NK2.1" , "NK2.2" , "NK2.3"  , "NK3",    "NK3.1" , "NK3.2" , "NK3.3" , "NK4"   , "NK4.1" , "NK4.2" , "NK4.3" , "NK4.4" , "NK4.5"  ,"NK4.6",  "NK5"  ,  "NK5.1" , "NK5.2" , "NK5.3" , "NK5.4" , "NK5.5",  "NK5.6",  "NK6",    "NK6.1" ,"NK6.2",  "NK6.3" , "NK6.4",  "NK6.5" , "NK6.6" , "SK1" ,   "SK1.1",  "SK1.2",  "SK1.3" , "SK2",  "SK2.1" , "SK2.2" , "SK2.3" , "SK2.4" , "SK2.5" , "SK2.6",  "SK3" ,   "SK3.1",  "SK3.2" ,"SK3.3","SK3.4" , "SK3.5" , "SK3.6")
+identical(rownames(nochim_seqtab_killed), rownames(killed_metadata)) 
+
+
+```
+
+
 ```{r killed-phyloseq-object, eval = FALSE}
 
 ps_killed = phyloseq(otu_table(nochim_seqtab_killed, taxa_are_rows = FALSE), sample_data(killed_metadata), tax_table(taxid_killed), phy_tree(killed_fitGTR$tree))
@@ -375,11 +400,29 @@ vst_killed <- phyloseq(otu_table(vst_trans_count_tab_killed, taxa_are_rows = T),
 ```
 
 
+```{r notree}
+
+ps_killed.nt <- phyloseq(otu_table(nochim_seqtab_killed, taxa_are_rows = FALSE), 
+                        sample_data(killed_metadata),
+                        tax_table(taxid_killed))
+
+vst_killed.nt <- phyloseq(otu_table(vst_trans_count_tab_killed, taxa_are_rows = T), 
+                       sample_data(killed_metadata), 
+                       tax_table(taxid_killed))
+
+
+```
+
+
 Save the files
 ```{r save-physq-objects, eval = FALSE}
 
 saveRDS(ps_killed, file = "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed" )
 
 saveRDS(vst_killed, file = "~/landfill-microcosms/data/killed_microcosms_objects/vst_killed" )
+
+saveRDS(ps_killed.nt, file = "~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.nt" )
+
+saveRDS(vst_killed.nt, file = "~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.nt" )
 
 ```

@@ -55,34 +55,40 @@ Uncomment and run this chunk only if you don't have the packages needed in the n
 
 ```
 
-It doesn't matter if the package names have quotes or not
+It doesn't matter if the package names have quotes or not. 
+
 ```{r load-packages, message=FALSE, warning=FALSE}
 
 
-library(dada2); packageVersion("dada2")
+library(dada2); packageVersion("dada2") 
 library(ggplot2)
-library(gridExtra)
 library(phyloseq)
-library(DECIPHER)
-library(phangorn)
-require("tidyverse")
-library("dplyr")
+library(DECIPHER) #for assigning taxonomy 
+library(phangorn) #for tree building 
+require("tidyverse") #data wrangling 
+library("dplyr") #data wrangling 
 library("rmarkdown")
-library("vegan")
-library("PoiClaClu")
-library("doParallel")
-library("plotly")
-library("microbiome")
-library("DESeq2")
-library("ggpubr")
-library("viridis")
-library("plyr")
-library("magrittr")
-library("scales")
-#library("data.table")
-#library(grid)
-#library(reshape2)
-#library(randomForest)
+
+
+
+
+```
+
+
+These packages are probably not needed in this part of the workflow, but I left them here just in case
+```{r extra-packages}
+# library(gridExtra)
+# library("vegan") #stats 
+# library("PoiClaClu")
+# library("doParallel")
+# library("plotly")
+# library("microbiome")
+# library("DESeq2")
+# library("ggpubr")
+# library("viridis")
+# library("plyr")
+# library("magrittr")
+# library("scales")
 
 ```
 
@@ -99,6 +105,10 @@ library("scales")
 * Step 7: Assign taxonomy, using the chimera-free reads
   + Step 7.1: Assign taxonomy another way with `DECIPHER` , fits with the variance stabilizing transformation in step 10 
 * Step 8: Make a tree with `phangorn`
+
+> All previous steps are done; if returning to this script later, start at step 9 & Skip the part of step 10 to make a variance stabilizing transformation 
+
+
 * Step 9:  Read in in your metadata table
 * Step 10: Variance stabilizing transformation; ignore if not transforming data
 * Step 11: Make a phyloseq object on transformed data
@@ -376,6 +386,7 @@ saveRDS(all_fitGTR, "../data/all_fitGTR") #save the tree to the data folder
 ```{r, eval=FALSE}
 
 all_metadata = read.csv("../data/metadata/allmetadata.csv")
+nochim_seqtab.all <- readRDS("~/landfill-microcosms/data/live_samples_objects/nochim_seqtab.all")
 
 #all 
 all(rownames(nochim_seqtab.all) %in% all_metadata$sample)
@@ -402,51 +413,51 @@ Turns out this is useful down the line
 ```{r make-count-tables, eval = FALSE}
 
 
-# 
-# #Give our seq headers more manageable names (ASV_1, ASV_2...) and to write some tables. 
-# asv_seqs <- colnames(nochim_seqtab.all)
-# asv_headers <- vector(dim(nochim_seqtab.all)[2], mode="character")
-# 
-# for (i in 1:dim(nochim_seqtab.all)[2]) {
-#   asv_headers[i] <- paste(">ASV", i, sep="_")
-# }
-# 
-# # making and writing out a fasta of our final ASV seqs:
-# asv_fasta <- c(rbind(asv_headers, asv_seqs))
-# write(asv_fasta, "ASVs.fa")
-# asv_tab <- t(nochim_seqtab.all)  #transpose seq tab
-# row.names(asv_tab) <- sub(">", "", asv_headers)
-# write.table(asv_tab, "ASVs_counts.tsv", sep="\t", quote=F, col.names=NA)
-# # count_tab will hold the ASV and sample names
-# count_tab <- read.table("ASVs_counts.tsv", header=T, row.names=1,
-#                         check.names=F, sep="\t")
-# 
-# 
-# 
-# # creating table of taxonomy [and setting any that are unclassified as "NA"...]
-# write.table(taxid, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
-# # tax_tab will hold the ASVs and the taxa that go with them.
-# tax_tab <- as.matrix(read.table("ASVs_taxonomy.tsv", header=T,
-#                                 row.names=1, check.names=F, sep="\t"))
-# 
-# 
-# #check to see if these look reasonable. Note, if you have a lot of data, use 'head'
-# head(count_tab)
-# head(tax_tab)
-# #At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
-# #At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV. 
-# 
-# # If your count_tab does NOT have the sample names in the rows, then you need to fix that. 
-# #The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows).
-# #I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
-# 
-# count_tab_t <- t(count_tab)
-# tax_tab_t <- t(tax_tab)
-# 
-# #They should now both have the sample name.fastq on the rows in these version of the tables.
-# #It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
-# 
-# identical(rownames(count_tab_t), rownames(all_metadata)) #if this = TRUE, then you're good
+
+#Give our seq headers more manageable names (ASV_1, ASV_2...) and to write some tables.
+asv_seqs <- colnames(nochim_seqtab.all)
+asv_headers <- vector(dim(nochim_seqtab.all)[2], mode="character")
+
+for (i in 1:dim(nochim_seqtab.all)[2]) {
+  asv_headers[i] <- paste(">ASV", i, sep="_")
+}
+
+# making and writing out a fasta of our final ASV seqs:
+asv_fasta <- c(rbind(asv_headers, asv_seqs))
+write(asv_fasta, "ASVs.fa")
+asv_tab <- t(nochim_seqtab.all)  #transpose seq tab
+row.names(asv_tab) <- sub(">", "", asv_headers)
+write.table(asv_tab, "ASVs_counts.tsv", sep="\t", quote=F, col.names=NA)
+# count_tab will hold the ASV and sample names
+count_tab <- read.table("ASVs_counts.tsv", header=T, row.names=1,
+                        check.names=F, sep="\t")
+
+taxid <- readRDS("~/landfill-microcosms/data/live_samples_objects/taxid")
+
+# creating table of taxonomy [and setting any that are unclassified as "NA"...]
+write.table(taxid, "ASVs_taxonomy.tsv", sep = "\t", quote=F, col.names=NA)
+# tax_tab will hold the ASVs and the taxa that go with them.
+tax_tab <- as.matrix(read.table("ASVs_taxonomy.tsv", header=T,
+                                row.names=1, check.names=F, sep="\t"))
+
+
+#check to see if these look reasonable. Note, if you have a lot of data, use 'head'
+head(count_tab)
+head(tax_tab)
+#At this stage, 'count_tab' has rows that are 'ASV_1' (for example), and columns that are 'name.fastq' and the data are counts.
+#At this stage, 'tax_tab' has rows that are 'ASV_1' (for example), and columns that are taxonomic classes and the data are the taxonomic lineages of each ASV.
+
+# If your count_tab does NOT have the sample names in the rows, then you need to fix that.
+#The ASV data tables and the #metadata tables MUST be formatted so that the sample names are in rows (or more, they must both be oriented the same way #and the statistical people prefer samples in rows).
+#I guess the tax_tab should have the ASVs in the same orientation as the #count_tab. If you need to fix them...this script will do so. BUT, you should rename the original files so that you preserve them. I've done that by adding a 't' here, which is the command for transposing a table (so you'll know by the name that it's a transposed table).
+
+count_tab_t <- t(count_tab)
+tax_tab_t <- t(tax_tab)
+
+#They should now both have the sample name.fastq on the rows in these version of the tables.
+#It would be smart here to check the row names of your count_tab to make sure they're in the same order as your prepared metadata table. Cuz now's a good time to fix it if it's not!
+
+identical(rownames(count_tab_t), rownames(all_metadata)) #if this = TRUE, then you're good
 
 ```
 
@@ -546,12 +557,37 @@ ps_all = phyloseq(otu_table(nochim_seqtab.all, taxa_are_rows = F), sample_data(a
 
 ```
 
+Step 11.2: Make object w/ simplified ASV names
+This doesn't work 
+```{r}
+
+# ps_all.ASVs <- phyloseq(otu_table(count_tab_t, taxa_are_rows = F), sample_data(all_metadata), tax_table(tax_tab), phy_tree(all_fitGTR$tree))
+
+
+```
+Step 11.3: Make objects w/o tree 
+```{r}
+
+ps_all.nt = phyloseq(otu_table(nochim_seqtab.all, taxa_are_rows = F),
+                     sample_data(all_metadata),
+                     tax_table(taxid))
+
+
+vst_all.nt <- phyloseq(otu_table(vst_trans_count_tab, taxa_are_rows = T),
+                    sample_data(all_metadata),
+                    tax_table(taxid))
+
+```
+
+
 
 #save phyloseq objects onto the desktop
 ```{r, eval = FALSE}
 
 saveRDS(vst_all, file = "../data/live_samples_objects/vst_all")
 saveRDS(ps_all, file = "../data/live_samples_objects/ps_all")
+saveRDS(vst_all.nt, file = "../data/live_samples_objects/vst_all.nt")
+saveRDS(ps_all.nt, file = "../data/live_samples_objects/ps_all.nt")
 
 ```
 

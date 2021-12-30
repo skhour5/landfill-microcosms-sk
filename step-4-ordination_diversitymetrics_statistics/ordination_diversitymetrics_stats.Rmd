@@ -82,7 +82,8 @@ ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/
 # Update Phyloseq Objects
 #### update the metadata tables
 
-```{r add_new_column}
+Here we are adding a new "treatment" column to each of the phyloseq objects to reflect whether the microcosms have been spiked
+```{r add_new_column, results='hide'}
 
 ps_all.step2_samdata <- ps_all.step2@sam_data #extract the sample data 
 
@@ -108,7 +109,7 @@ new_sam_data <- new_sam_data %>%
 
 ```
 
-```{r add_new_column_killed_samdata}
+```{r add_new_column_killed_samdata, results='hide'}
 
 ps_killed.step2_samdata <- ps_killed.step2@sam_data #extract the sample data 
 
@@ -135,7 +136,6 @@ levels(new_sam_data_killed$treatment)
 
 ```
 
-
 ```{r update-physeq-objects}
 
 ps_all.step2@sam_data = new_sam_data # assign the new dataframe to the phyloseq object
@@ -145,7 +145,6 @@ vst_killed.step2@sam_data = new_sam_data_killed
 
 
 ```
-
 
 
 #### re-simplifying names
@@ -160,16 +159,8 @@ vst_killed <- vst_killed.step2
 
 
 
-####  Assigning plot colors
-
-
-These are the original colors I was using, but they are not colorblind friendly
-```{r assign-colors}
-
-# exper_colors <-  c( "gray50", "blue", "firebrick1", "gold")
-
-```
-
+## Assigning plot colors
+Here are some pallette optoins
 ```{r list-all-cb-friendly-palettes}
 
 brewer.pal.info %>% 
@@ -191,6 +182,7 @@ exper_colors <- c("black", "#3DB7E9",  "#D55E00", "#F0E442")
 ```
 
 
+
 # Distance Measures; Ordination plots
 
 ## Live Samples 
@@ -204,6 +196,7 @@ nmds_bray_vst_all_plot  <-
   plot_ordination(vst_all, nmds_bray_vst_all, color = "spike", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
     scale_color_manual(values= exper_colors) + 
     geom_point(size=3.5)
+
 nmds_bray_vst_all_plot #print the plot
 
 
@@ -219,10 +212,95 @@ nmds_bray_vst_all_plot  <-
     theme_bw()
 
 
-nmds_bray_vst_all_plot #print the plot
+nmds_bray_vst_all_plot +
+  theme(legend.title = element_blank())+
+  scale_shape_discrete(na.translate = F) +
+  scale_color_manual(values = c("black", "#3DB7E9",  "#D55E00", "#F0E442"), na.value = NA, labels = c("None", "Antibiotics", "Fe(OH)3", "Na2SO4", " "))
+#print the plot
+
+
+ggsave("figures/nmds-bray-vst-live.jpeg", height = 6)
+
+```
+
+
+
+
+```{r bray-just-t6}
+
+vst_all.t6 <- vst_all %>% 
+  subset_samples(sample_time == "T6")
+
+nmds_bray_vst_all.t6 <- ordinate(vst_all.t6, method="NMDS", distance = "bray")
+
+nmds_bray_vst_all_plot.t6  <-
+  plot_ordination(vst_all.t6, nmds_bray_vst_all.t6, color = "treatment", title = "Bray-Curtis NMDS")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5)+ 
+    theme_bw() +
+    theme(legend.title = element_blank())+
+    scale_shape_discrete(na.translate = F) +
+    scale_color_manual(values = c("black", "#3DB7E9",  "#D55E00", "#F0E442"), na.value = NA, labels = c("None", "Antibiotics", "Fe(OH)3", "Na2SO4", " "))
+
+nmds_bray_vst_all_plot.t6#print the plot
+
+ggsave("figures/nmds_bray_live_t6_vst.jpeg", height = 6)
+
 
 
 ```
+
+
+```{r bray-just-t6-t5}
+
+vst_all.t5.6 <- vst_all %>% 
+  subset_samples(sample_time %in% c("T6", "T5"))
+
+nmds_bray_vst_all.t6.5 <- ordinate(vst_all.t5.6, method="NMDS", distance = "bray")
+
+nmds_bray_vst_all_plot.t6.5  <-
+  plot_ordination(vst_all.t5.6, nmds_bray_vst_all.t6.5, color = "treatment", title = "Bray-Curtis NMDS", shape = "sample_time")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5, )+ 
+    theme_bw() +
+    theme(legend.title = element_blank())+
+    scale_shape_discrete(na.translate = F) +
+  scale_shape_manual(values= c(7, 8))+
+    scale_color_manual(values = c("black", "#3DB7E9",  "#D55E00", "#F0E442"), na.value = NA, labels = c("None", "Antibiotics", "Fe(OH)3", "Na2SO4", " "))
+
+nmds_bray_vst_all_plot.t6.5 #print the plot
+
+ggsave("figures/nmds_bray_live_t6and5_vst.jpeg", height = 6)
+
+
+
+```
+
+```{r just-t1-t4}
+
+vst_all.t4 <- vst_all %>% 
+  subset_samples(sample_time %in% c("T1", "T2", "T3", "T4"))
+
+nmds_bray_vst_all.t4 <- ordinate(vst_all.t4, method="NMDS", distance = "bray")
+
+cols_blue_4<- c('#FEDC56','#c7e9b4','#41b6c4','#253494')
+
+
+nmds_bray_vst_all_plot.t4  <-
+  plot_ordination(vst_all.t4, nmds_bray_vst_all.t4, color = "sample_time", title = "Bray-Curtis NMDS", shape = "sample_time")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5, )+ 
+    theme_bw() +
+    theme(legend.title = element_blank())+
+    scale_shape_discrete(na.translate = F)+
+    scale_color_manual(values = cols_blue_4)
+
+nmds_bray_vst_all_plot.t4 #print the plot
+
+ggsave("figures/nmds_bray_live_4_vst.jpeg", height = 6)
+
+```
+
 
 
 ### Weighted Unifrac 
@@ -240,6 +318,29 @@ PCoA_wunifrac_vst_all_plot
 
 ```
 
+```{r wunifrac-just-t6}
+
+wunifrac.t6 <- ordinate(vst_all.t6, method="PCoA", distance = "wunifrac")
+
+wunifrac.t6.plot  <-
+  plot_ordination(vst_all.t6, wunifrac.t6, color = "treatment", title = "")+ 
+    scale_color_manual(values= exper_colors) + 
+    geom_point(size=3.5)+ 
+    theme_bw() +
+    theme(legend.title = element_blank())+
+    scale_shape_discrete(na.translate = F) #+
+   # scale_color_manual(values = c("black", "#3DB7E9",  "#D55E00", "#F0E442"), na.value = NA, labels = c("None", "Antibiotics", "Fe(OH)3", "Na2SO4", " "))
+
+wunifrac.t6.plot #print the plot
+
+
+ggsave("figures/wunifrac.vst_all_t6.jpeg", height = 6 )
+
+
+```
+
+
+
 ```{r pcoa-wunifrac-vst-all-treatment}
 
 PCoA_wunifrac_vst_all_plot  <-
@@ -248,18 +349,20 @@ PCoA_wunifrac_vst_all_plot  <-
   scale_color_manual(values= exper_colors) + 
   theme_bw()
 
-PCoA_wunifrac_vst_all_plot
+PCoA_wunifrac_vst_all_plot +  theme(legend.title = element_blank())
+
+ggsave("figures/weightedunifrac_PCOA-vst-live.jpeg", height = 6)
 
 ```
 
 
 This part doesn't work because there are too few points
 ```{r draw-ellipse}
-
+# 
 # PCoA_wunifrac_vst_all_plot +
 #   scale_color_manual(values= exper_colors) +
 #   geom_point(size=3.5) +
-#   stat_ellipse(type="norm", geom="polygon", alpha=1/10)
+#  stat_ellipse(type="norm", geom="polygon", alpha=1/10)
 
 
 ```
@@ -277,7 +380,12 @@ PCoA_unifrac_vst_all_plot <-  plot_ordination(ps_all, PCoA_unifrac_vst_all, colo
     scale_color_manual(values= exper_colors) +
     geom_point(size=3.5)
 
-PCoA_unifrac_vst_all_plot
+PCoA_unifrac_vst_all_plot + 
+  theme_bw()+
+  theme(legend.title = element_blank())
+
+
+ggsave("figures/unifracPCOA-vst-live.jpeg", height = 6)
 
 
 ```
@@ -286,7 +394,7 @@ PCoA_unifrac_vst_all_plot
 ## Killed Samples
 
 The killed samples have an extra data time sample @ T6 because we didn't take the T6 sample for the live samples
-```{r remove-t7}
+```{r remove-t7, results = 'hide'}
 
 ps_killed.rmt7 <- subset_samples(ps_killed, sample_time != "T6")
 vst_killed.rmt7 <-subset_samples(vst_killed, sample_time != "T6")
@@ -345,16 +453,21 @@ nmds_bray_vst_killed.rmt7 <- ordinate(vst_killed.rmt7, method="NMDS", distance =
 
 
 nmds_bray_vst_killed.plot.rmt7  <-
-  plot_ordination(vst_killed.rmt7, nmds_bray_vst_killed.rmt7, color = "treatment", shape ="sample_time", title = "Bray-Curtis NMDS")+ 
+  plot_ordination(vst_killed.rmt7, nmds_bray_vst_killed.rmt7, color = "treatment", shape ="sample_time", title = "Bray-Curtis NMDS killed")+ 
     scale_color_manual(values= exper_colors) + 
     geom_point(size=3.5)+ 
-    theme_bw()
+    theme_bw() +
+    theme(legend.title = element_blank())
 
 
 nmds_bray_vst_killed.plot.rmt7 #print the plot
 
+ggsave("figures/BrayNMDS-killed-vst.jpeg", height = 6)
+
 
 ```
+
+
 
 
 ### Weighted Unifrac 
@@ -365,24 +478,342 @@ PCoA_wunifrac_vst_killed <-  phyloseq::ordinate(vst_killed.rmt7, method="PCoA", 
 PCoA_wunifrac_vst_all_killed.plot  <-
   plot_ordination(vst_killed.rmt7 , PCoA_wunifrac_vst_killed, color = "treatment", shape ="sample_time", title = "wUnifrac PCoA killed") +
   geom_point(size=3.5) +
-  scale_color_manual(values= exper_colors)
+  scale_color_manual(values= exper_colors)+
+  theme_bw()+
+  theme(legend.title = element_blank())
 
 PCoA_wunifrac_vst_all_killed.plot
 
+ggsave("figures/weightedunifrace_pcoa-killed-vst.jpeg", height = 6)
+
+
+```
+
+### unweighted unifrace
+```{r pcoa_unifrac-ps_killed}
+
+PCoA_unifrac_ps_killed <-  phyloseq::ordinate(ps_killed.rmt7, method="PCoA", distance = "unifrac")
+
+PCoA_unifrac_ps_killed.plot  <-
+  plot_ordination(ps_killed.rmt7 , PCoA_unifrac_ps_killed , color = "treatment", shape ="sample_time", title = "Unifrac PCoA killed") +
+  geom_point(size=3.5) +
+  scale_color_manual(values= exper_colors)+
+  theme_bw()+
+  theme(legend.title = element_blank())
+
+PCoA_unifrac_ps_killed.plot
+
+ggsave("figures/unifrace_pcoa-killed-vst.jpeg", height = 6)
+
+
 
 ```
 
 
-##### Combine Killed and Live samples vst 
+
+
+## Combine Killed and Live samples vst 
 
 For this I would likely have to either make a phloseq object with both sets of samples from the beginning, or make 2 objects without the trees, and then merge them together. Honestly not sure it's worth comparing these two datasets; might come back to it later. 
-```{r}
 
-#vst_combo <- merge_phyloseq(vst_all, vst_killed.rmt7)
-## Error in FUN(X[[i]], ...) : one tree has a different number of tips
+```{r vst-combined-metadata}
+
+#load no tree phyloseq objects 
+vst_all.nt <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all.nt")
+vst_killed.nt <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.nt")
+
+#combine phyloseq objects
+vst_combo <- merge_phyloseq(vst_all.nt, vst_killed.nt)
+
+#extract metadata 
+meta_combo <- sample_data(vst_combo)
+
+#add a variable that identifies which come from the live and which come from the killed, for some reason, the sample column in the killed metadata is empty, so we can use that to your advantage 
+meta_combo <- meta_combo %>% 
+  mutate(experiment = case_when(is.na(sample) ~ "killed", 
+                            TRUE ~ "live"))
+
+
+sample_data(vst_combo) <- meta_combo #reassign the new metadata table to the sample_data of the merged phyloseq object
+
+```
+
+```{r vst-combo-nmds-bray}
+
+
+nmds_bray.vst_combo <- ordinate(vst_combo, method="NMDS", distance = "bray")
+
+
+
+nmds_bray.vst_combo.plot  <-
+  plot_ordination(vst_combo, nmds_bray.vst_combo, color = "experiment", title = "Bray-Curtis NMDS")+ 
+    geom_point(size=3.5)+ 
+    theme_bw()
+
+
+
+
+nmds_bray.vst_combo.plot
+
+```
+The NMDS plot looks super weird, presumably because I've used the transformed data and they are normalized internally somehow
+
+I'm going to use the untransformed data instead. 
+
+What I should really do is run through the dada2 piple with all the samples in one group, but I'm guess that would take FOREVER to run on this computer, so we're going to this work around instead. 
+```{r ps-combined-metadata}
+
+
+ps_all.nt <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.nt")
+
+ps_killed.nt <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.nt")
+
+
+ps_combo <- merge_phyloseq(ps_all.nt, ps_killed.nt)
+
+meta_combo.ps <- sample_data(ps_combo)
+
+meta_combo.ps <- meta_combo.ps %>% 
+  mutate(experiment = case_when(is.na(sample) ~ "killed", #when sample column is NA, assign the new variable to killed 
+                            TRUE ~ "live")) #otherwise, assign it live
+
+
+sample_data(ps_combo) <- meta_combo.ps
+
+```
+
+```{r ps-combo-nmds-bray}
+
+
+nmds_bray.ps_combo <- ordinate(ps_combo, method="NMDS", distance = "bray")
+
+
+
+nmds_bray.ps_combo.plot  <-
+  plot_ordination(ps_combo, nmds_bray.ps_combo, color = "experiment", title = "Bray-Curtis NMDS")+ 
+    geom_point(size=3.5)+ 
+    theme_bw()
+
+
+nmds_bray.ps_combo.plot
+
+```
+This looks much better, but I think I still need to remove the T6 from the killed samples because there are far too many points for killed. 
+
+```{r killed.rmt7}
+
+
+ps_killed.nt.rmt7 <- subset_samples(ps_killed.nt, sample_time != "T6") #remove T6 from the no tree ps object 
+
+#now we need to rename T7 to T6
+
+samdata.nt.rmt7 <- ps_killed.nt.rmt7@sam_data
+
+samdata.nt.rmt7 <- samdata.nt.rmt7 %>% 
+  mutate(sample_time = case_when(sample_time == "T7" ~ "T6", 
+                                 TRUE ~ sample_time))
+         
+
+as.factor(samdata.nt.rmt7$sample_time) #change back to a factor, should now be T1-T6 
+
+sample_data(ps_killed.nt.rmt7) <- samdata.nt.rmt7
+
+#remake the ps object w T7 removed
+ps_combo.rmt7 <- merge_phyloseq(ps_all.nt, ps_killed.nt.rmt7)
+
+meta_combo.ps.rmt7 <- sample_data(ps_combo.rmt7)
+
+meta_combo.ps.rmt7 <- meta_combo.ps.rmt7 %>% 
+  mutate(experiment = case_when(is.na(sample) ~ "killed", #when sample column is NA, assign the new variable to killed 
+                            TRUE ~ "live")) #otherwise, assign it live
+
+
+sample_data(ps_combo.rmt7) <- meta_combo.ps.rmt7
+
 
 
 ```
+
+```{r ps-combo-nmds-bray-rmt7}
+
+
+nmds_bray.ps_combo.rmt7 <- ordinate(ps_combo.rmt7, method="NMDS", distance = "bray")
+
+
+nmds_bray.ps_combo.plot.rmt7  <-
+  plot_ordination(ps_combo.rmt7, nmds_bray.ps_combo.rmt7, color = "experiment", title = "Bray-Curtis NMDS")+ 
+    geom_point(size=3.5)+ 
+    theme_bw()
+
+
+nmds_bray.ps_combo.plot.rmt7
+
+```
+
+https://colorbrewer2.org/#type=sequential&scheme=YlGnBu&n=6
+```{r nicer-plot-ps-combo-nmds-bray-rmt7}
+
+cols = c("#5A000F", "#00CBA7")
+
+cols_disc = c('#1b9e77','#d95f02','#7570b3','#e7298a','#66a61e','#e6ab02')
+
+cols_pink <- c('#feebe2','#fcc5c0','#fa9fb5','#f768a1','#c51b8a','#7a0177')
+
+cols_blue <- c('#FEDC56','#c7e9b4','#7fcdbb','#41b6c4','#2c7fb8','#253494')
+
+nmds_bray.ps_combo.plot.rmt7  <-
+  plot_ordination(ps_combo.rmt7, nmds_bray.ps_combo.rmt7, shape = "experiment", title = "Bray-Curtis NMDS" , color = "sample_time")+ 
+    geom_point(size=3)+ 
+    theme_bw() +
+  scale_color_manual(values = cols_blue)+
+  scale_shape_manual(values= c(15 ,19))+
+  theme(legend.title = element_blank()) 
+
+  # stat_ellipse(aes(ps_combo.rmt7, shape = "experiment"), type="norm", geom="polygon", alpha=1/10)
+  
+nmds_bray.ps_combo.plot.rmt7
+
+
+ggsave("figures/combined-nmds-bray.jpeg", height = 6, width = 7)
+
+#different shapes
+
+nmds_bray.ps_combo.plot.rmt7  <-
+  plot_ordination(ps_combo.rmt7, nmds_bray.ps_combo.rmt7, shape = "experiment", title = "Bray-Curtis NMDS" , color = "sample_time")+ 
+    geom_point(size=3)+ 
+    theme_bw() +
+  scale_color_manual(values = cols_blue)+
+  scale_shape_manual(values= c(17 ,19))+
+  theme(legend.title = element_blank()) 
+
+  # stat_ellipse(aes(ps_combo.rmt7, shape = "experiment"), type="norm", geom="polygon", alpha=1/10)
+  
+nmds_bray.ps_combo.plot.rmt7
+
+
+ggsave("figures/combined-nmds-bray2.jpeg", height = 6, width = 7)
+
+
+```
+
+
+```{r check-taxtab, eval = F}
+
+ps_all.nt.taxtab = tax_table(ps_all.nt)
+
+check_df_all <- as.data.frame(ps_all.nt.taxtab)
+
+ps_killed.nt.rmt7.taxtab = tax_table(ps_killed.nt.rmt7)
+
+check_df_killed <- as.data.frame(ps_killed.nt.rmt7.taxtab)
+
+
+```
+
+
+
+
+# Group Signifcance Testing with ADONIS 
+another way:
+https://mibwurrepo.github.io/Microbial-bioinformatics-introductory-course-Material-2018/beta-diversity-metrics.html#phylogenetic-beta-diversity-metrics
+
+
+paper source:
+https://onlinelibrary.wiley.com/doi/10.1002/9781118445112.stat07841
+
+```{r adonisfunction}
+
+#Set a random seed so that exact results can be reproduced
+set.seed(10000)
+
+
+#function to run ADONIS test on a phyloseq object and a variable from metadata 
+doadonis_wunifrac <- function(physeq, category) {
+  bdist <- phyloseq::distance(physeq, "wunifrac")
+  col <- as(sample_data(physeq), "data.frame")[ ,category]
+  # Adonis test
+  adonis.bdist <- adonis(bdist ~ col, permutations = 10000) 
+  #the great number of permuations gives greater precision, but also takes longer to run, although this didn't take that long
+  print("Adonis results:")
+  print(adonis.bdist)}
+
+
+doadonis_bray <- function(physeq, category) {
+  bdist <- phyloseq::distance(physeq, "bray")
+  col <- as(sample_data(physeq), "data.frame")[ ,category]
+  # Adonis test
+  adonis.bdist <- adonis(bdist ~ col, permutations = 10000) 
+  #the great number of permuations gives greater precision, but also takes longer to run, although this didn't take that long
+  print("Adonis results:")
+  print(adonis.bdist)}
+
+
+```
+
+
+```{r adonis-all-timepoints}
+
+all_timepoints_adonis = doadonis_wunifrac(vst_all, "treatment") #Results are significant, though I'm not sure which groups are different from each other. 
+
+all_timepoints_adonis$aov.tab$'Pr(>F)'[1] #this gives you the p value of the adonis test 
+#same thing but in another way; double bracket notation; 
+all_timepoints_adonis[["aov.tab"]][["Pr(>F)"]][1]
+
+```
+
+
+```{r adonist1-t4}
+
+ps_all.t4 <- ps_all %>% subset_samples(sample_time %in% c("T1", "T2", "T3", "T4"))
+
+adonis.t4.wu <- doadonis_wunifrac(ps_all.t4, "sample_time") #significant, 
+
+#but how do we find out which group is different from the other?
+
+
+```
+
+```{r check-homogenity-t4}
+
+ps_all.t4_unifrac.dis <- UniFrac(ps_all.t4)
+
+ps_all.t4_meta <- sample_data(ps_all.t4)
+
+ps.disper <- betadisper(ps_all.t4_unifrac.dis, ps_all.t4_meta$sample_time)
+
+permutest(ps.disper, pairwise = TRUE)
+
+plot(ps.disper)
+
+boxplot(ps.disper)
+
+TukeyHSD(ps.disper)
+
+
+
+anova(ps.disper)
+
+```
+Not sigificant but idk if that implies homogenity or not homogenity 
+
+https://rfunctions.blogspot.com/2019/03/betadisper-and-adonis-homogeneity-of.html
+
+Based on the blog, we meet the adonis condition of homogenity P<0.105
+ 
+```{r t2-t3-t4}
+
+ps_all.ntt1 <- ps_all%>%
+  subset_samples(sample_time %in% c("T2", "T3", "T4"))
+
+doadonis_bray(ps_all.ntt1, "sample_time")
+
+set.seed(1000)
+adonis.ntt1.wu <- doadonis_wunifrac(ps_all.ntt1, "sample_time")
+
+str(adonis.ntt1.wu)
+
+```
+
 
 
 

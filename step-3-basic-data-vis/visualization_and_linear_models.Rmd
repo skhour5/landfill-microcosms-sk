@@ -10,7 +10,8 @@ output:
 
 This workflow will use tidyverse functions and ggplot to make visualizations such as boxplots, heatmaps, and histograms. This is meant as a first pass at seeing what the data look like. 
 
-We also try our hand at linear models, however, these are likely not the best statistical tools for 16s data. Step 4; ordination, and Step 5; differential expression, are probably better tools to get some statistical power behind our results. 
+We also try our hand at linear models, however, these are likely not the best statistical tools for 16s data. 
+Step 4; ordination, and Step 5; differential expression, are probably better tools to get some statistical power behind our results. 
 
 Before Starting: 
 
@@ -31,7 +32,7 @@ library(tidymodels)
 library(RColorBrewer)
 ```
 
-This is the dataset used first, but I will also run some chunks with the other phyloseq objects created in step 2, depending on what I would like to do
+This is the main dataset used -- but I will also run some chunks with the other phyloseq objects created in step 2, depending on what I would like to do
 ```{r read_phyloseq_object}
 full_16s_dataset <- readRDS("../data/live_samples_objects/ps_all.step2")
 ```
@@ -69,7 +70,9 @@ ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/
 
 ```
 
-In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
+In order to analyze this data with the tidyverse functions, we need to convert the phylsoeq object to a regular data frame. 
+First we use the `transform_sample_counts` function to change our absolute counts into relative count, which are more useful for visualization than absolute counts. 
+Alternatively, we can skip this step and use use any of the already transformed phyloseq objects the following step with the function "ps_melt"
 ```{r define-calc-prop}
 
 calc_prop <- function(x){x / sum(x)}
@@ -99,8 +102,6 @@ I don't think I need this anymore because I already re-leveled the spikes in ste
 ```
 
 
-
-
 ## Exploratory Visualization
 
 This chunk will apply a theme to all of our plots to make them look pretty. 
@@ -117,8 +118,10 @@ Let's check out the phyla present in the data. (Absolute counts, but it really d
    count() %>% 
    arrange(desc(n)) 
 
-
 ```
+
+
+
 *Firmicutes*, *Proteobacteria*, and *Actinobacteriota* are the most abudant Phyla. 
 
 

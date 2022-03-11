@@ -159,7 +159,7 @@ There are several possible ways to evaluate the data, but a standard approach co
 
 This part is only really relevant for the non-transformed phyloseq objects. The variance stabilizing transformation somehow re-combines the data so the ASVs in each sample are no longer accurate 
 
-This chunk makes a data frame with 3 variables to count the number of ASVs in descreasing order
+This chunk makes a data frame with 3 variables to count the number of ASVs in decreasing order
 ```{r make-df-of-ASV-sums}
 
 readsumsdf.all <- data.frame(nreads = sort (taxa_sums(ps_all), decreasing = TRUE), # Create a new data frame of the sorted row sums,
@@ -173,7 +173,6 @@ readsumsdf.killed <- data.frame(nreads = sort (taxa_sums(ps_killed), decreasing 
                          )
 
 ```
-
 
 ```{r make-sample-sum-df}
 
@@ -204,6 +203,7 @@ ggplot(readsumsdf.killed, aes(x = sorted, y = nreads)) +
 
 
 ```
+
 ```{r histogram}
 
 # Histogram of the number of Samples (y-axis) at various read depths
@@ -291,6 +291,7 @@ label= "sample"
 
 
 ```
+
 ```{r killed-plot}
 
 #plot the data by the treatment variable 
@@ -308,12 +309,12 @@ ss_killed_boxplot
 
 ```
 
-
 The example data does have several samples with fewer than 1,000 ASV. 
 
 When questionable samples arise you should take note of them so if there are samples which behave oddly in downstream analysis you can recall this information and perhaps justify their removal. In this case lets remove them for practice. 
 
 Here it looks like NK5T1 and AB1T4 are outliers; maybe remove them? 
+Here I made two new phyloseq objects called ps_all.rmout and ps_killed.rmout in which the outliers are removed, but the original ps objects are preserved. 
 ```{r}
 
 nsamples(ps_all) #check how many samples are present
@@ -388,7 +389,8 @@ ggplot(prev_all1, aes(TotalAbundance, Prevalence / nsamples(ps_all),color=Family
 
 
 ## Step 5) Prevalence filtering
-This is how you filter if you wanted to filter at a ceratin prevelance. 
+This is how you filter if you wanted to filter at a certain prevalence. 
+here I amke ps_all.5, in which taxa with a prevelance in <5% of samples is removed. 
 ```{r prevelance-filtering}
  nsamples(ps_all)
  prev_thres_all = 0.05 * nsamples(ps_all)
@@ -471,7 +473,6 @@ dev.off()
 ggarrange(p.nolog, p.log, ncol = 2, labels = c("A)", "B)"))
 
 ```
-
 These data are more normal without the log transformation.. 
 
 ```{r ps_killed_transformations}

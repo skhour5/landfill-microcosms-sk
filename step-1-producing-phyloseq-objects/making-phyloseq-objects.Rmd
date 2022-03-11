@@ -14,6 +14,8 @@ Outputs: Phyloseq objects with and without variance stabilizing transformations.
 
 Tips before starting:
 
+* Go to edit > folding > collapse all
+ + open something when you need it, this will make the workflow more managable. 
 * Make sure you have the lastest version of R, this Markdown was made on R version 4.1.1 
 * Some of these steps take a while, make sure you change your computer settings so that it doesn't automatically sleep during one of the steps
  + That said, if your comp doesn't have a whole lot of memory, don't multitask while running the code chunks so your comp doesn't crash

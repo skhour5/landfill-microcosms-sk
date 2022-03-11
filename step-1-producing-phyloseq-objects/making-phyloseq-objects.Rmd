@@ -7,6 +7,11 @@ output:
     theme: readable
 ---
 
+Inputs: fastq files, merged or paired or unpaired forward and reverse. This workflow is for already paired files, so it will need to be modified slightly in step 2, but the rest will be the same. 
+
+Outputs: Phyloseq objects with and without variance stabilizing transformations. It's also a good idea to save intermediate step objects in case you need to go back and change something. 
+
+
 Tips before starting:
 
 * Make sure you have the lastest version of R, this Markdown was made on R version 4.1.1 
@@ -581,7 +586,7 @@ vst_all.nt <- phyloseq(otu_table(vst_trans_count_tab, taxa_are_rows = T),
 
 
 
-#save phyloseq objects onto the desktop
+#save phyloseq objects 
 ```{r, eval = FALSE}
 
 saveRDS(vst_all, file = "../data/live_samples_objects/vst_all")

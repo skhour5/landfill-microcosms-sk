@@ -5,11 +5,15 @@ date: "12/20/2021"
 output: html_document
 ---
 
+Inputs: fastq files, merged or paired or unpaired forward and reverse. This workflow is for already paired files, so it will need to be modified slightly in step 2, but the rest will be the same. 
+
+Outputs: Phyloseq objects with and without variance stabilizing transformations. It's also a good idea to save intermediate step objects in case you need to go back and change something. 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
+Load packages 
 ```{r load-packages, message=FALSE, warning=FALSE}
 
 
@@ -39,7 +43,6 @@ library("scales")
 #library(randomForest)
 
 ```
-
 
 
 Step 1: Getting the Files ready 
@@ -200,8 +203,6 @@ saveRDS(taxid_killed, "../data/killed_microcosms_objects/taxid_killed") # save t
 
 ```
 
-
-
 Step 8: Make phylogenetic tree 
 ```{r killed-step-8-make-tree, eval=FALSE}
 
@@ -235,8 +236,6 @@ identical(rownames(nochim_seqtab_killed), rownames(killed_metadata))
 
 
 ```
-
-
 
 Step 10: Variance stablilizing transformation
 
@@ -302,7 +301,6 @@ identical(rownames(count_tab_killed.t), rownames(killed_metadata)) #if this = TR
 
 ```
 
-
 Step 10 continued
 ```{r variance-stabilizing-transfromation, eval=FALSE, message = F}
 
@@ -326,7 +324,6 @@ vst_trans_count_tab_killed <- assay(deseq_counts_vst.k) # so this is a transform
 
 
 ```
-
 
 
 STEP 10- rewritten; 
@@ -355,8 +352,6 @@ vst_trans_count_tab_killed <- assay(deseq_counts_vst.k) # so this is a transform
 saveRDS(vst_trans_count_tab_killed, "~/landfill-microcosms/data/killed_microcosms_objects/vst_trans_count_tab_killed")
 
 ```
-
-
 
 
 Step 11:Make phyloseq objects
@@ -399,7 +394,6 @@ vst_killed <- phyloseq(otu_table(vst_trans_count_tab_killed, taxa_are_rows = T),
 
 ```
 
-
 ```{r notree}
 
 ps_killed.nt <- phyloseq(otu_table(nochim_seqtab_killed, taxa_are_rows = FALSE), 
@@ -412,7 +406,6 @@ vst_killed.nt <- phyloseq(otu_table(vst_trans_count_tab_killed, taxa_are_rows = 
 
 
 ```
-
 
 Save the files
 ```{r save-physq-objects, eval = FALSE}

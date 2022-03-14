@@ -37,35 +37,35 @@ This is the main dataset used -- but I will also run some chunks with the other 
 full_16s_dataset <- readRDS("../data/live_samples_objects/ps_all.step2")
 ```
 
-
+I don't need these in this step, so I'll comment it out for now and uncomment one I need one of these transformed phyloseq objects. 
 ```{r import-all-objects}
 
 # live samples 
 
-ps_all.step2 <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.step2") 
-
-ps_all.rmout <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.rmout") #outlier removed
-
-vst_all.step2 <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all.step2")
-
-ps_all.rl <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.rl") 
-
-ps_all.prop <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.prop") 
-
-
-
-
- #killed samples 
-
-ps_killed.step2 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.step2")
-
-ps_killed.rmout <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmout")
-
-vst_killed.step2 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.step2")
-
-ps_killed.rl <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rl")
-
-ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.prop")
+# ps_all.step2 <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.step2") 
+# 
+# ps_all.rmout <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.rmout") #outlier removed
+# 
+# vst_all.step2 <- readRDS("~/landfill-microcosms/data/live_samples_objects/vst_all.step2")
+# 
+# ps_all.rl <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.rl") 
+# 
+# ps_all.prop <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.prop") 
+# 
+# 
+# 
+# 
+#  #killed samples 
+# 
+# ps_killed.step2 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.step2")
+# 
+# ps_killed.rmout <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmout")
+# 
+# vst_killed.step2 <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/vst_killed.step2")
+# 
+# ps_killed.rl <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rl")
+# 
+# ps_killed.prop <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.prop")
 
 
 ```
@@ -131,6 +131,7 @@ ggplot(full_16s_df_rel, aes(Abundance)) +
   labs(x = "Relative Abundance")
 
 ```
+
 From the plot above we can see that most of the samples have OTUs with very low relative abundances <002. Perhaps from this plot we can get an understanding of how much of the data gets cut off when we filter for different abundances.
 
 
@@ -154,7 +155,6 @@ genus_desending
   theme_bw()
 ```
 There are 127 identified Genuses, are most of them are observed <10000 times, with one outlier (*Caproiciproducens*). That being said, the vast majority of genera are NA. 
-
 
 ### Visualization plots of relative abudances throughout the dataset
 
@@ -242,7 +242,7 @@ full_16s_df_rel %>%
 
 ```
 
-
+This is not working, dunno why but I think it was a bad plot either way
 ```{r look-at-triplicate-controls-over-time}
 
  cols = brewer.pal(9, "Spectral")
@@ -287,10 +287,26 @@ full_16s_df_rel %>%
 Not a very useful sccatter plot 
 
 
+```{r}
+
+ggplot(full_16s_df_rel, aes(spike, Abundance)) +
+  geom_point()
+
+```
+
+```{r}
+full_16s_df_rel %>% 
+  filter(Genus == "Thermoanaerobacterium") %>% 
+  ggplot(aes(spike, Abundance)) +
+  geom_point()
+```
+
+
 ```{r tumebacillus-scatterplot-by-spike}
+
 full_16s_df_rel %>% 
   filter(Genus == "Tumebacillus") %>%
-  ggplot(aes(x = spike, y = Abundance, fill = Genus, color = Genus)) + 
+  ggplot(aes(spike, Abundance)) + 
   geom_point()
 
 ```

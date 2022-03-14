@@ -9,3 +9,131 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r download-package}
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("ANCOMBC")
+
+
+```
+```{r load-packages}
+
+library(tidyverse)
+library(phyloseq)
+library(ANCOMBC)
+
+```
+
+
+```{r load-phyloseq-objects}
+
+ps_all <- readRDS("~/landfill-microcosms/data/live_samples_objects/ps_all.step4")
+
+ps_killed <- readRDS("~/landfill-microcosms/data/killed_microcosms_objects/ps_killed.rmt7") #t6 removed and replaced with t7
+
+```
+
+```{r subset}
+
+ps_all.afterspike <- ps_all %>% 
+  subset_samples(sample_time %in% c("T5", "T6"))
+
+ps_killed.afterspike <- ps_killed %>% 
+  subset_samples(sample_time %in% c("T5", "T6"))
+
+meta_all <- sample_data(ps_all.afterspike)
+
+```
+
+```{r run-ancombc}
+
+out.all = ancombc(phyloseq = ps_all.afterspike, formula = "treatment + sample_time", p_adj_method = "holm", zero_cut = 0.90, 
+                  lib_cut = 1000, group = "treatment", neg_lb = TRUE, max_iter = 100, 
+                  conserve = TRUE, alpha = 0.05, global = TRUE)
+
+```
+
+
+```{r res}
+
+res <- out.all$res
+res_global <- out.all$res_global
+
+
+```
+
+
+```{r str-metadata}
+str(meta_all)
+
+levels(meta_all$treatment)
+meta_all$sample_time
+
+
+```
+
+
+```{r coefficients}
+
+tab_coef <- res$beta
+col_name <- c("AB-Control", "Fe(OH)3-Control", "Na2SO4-Control", "T6-T5")
+colnames(tab_coef) = col_name
+tab_coef %>% datatable(caption = "Coefficients from the Primary Result") %>%
+      formatRound(col_name, digits = 2)
+```
+
+```{r SEs}
+tab_se = res$se
+colnames(tab_se) = col_name
+tab_se %>% datatable(caption = "SEs from the Primary Result") %>%
+      formatRound(col_name, digits = 2)
+
+```
+
+```{r test-stats}
+tab_w = res$W
+colnames(tab_w) = col_name
+
+
+```
+
+
+```{r p-values}
+
+tab_p = res$p_val
+colnames(tab_p) = col_name
+
+```
+
+```{r adjusted-p-values}
+
+tab_q = res$q
+colnames(tab_q) = col_name
+
+```
+
+```{r diff-abundant-taxa}
+
+tab_diff = res$diff_abn
+colnames(tab_diff) = col_name
+
+tab_diff <- tab_diff %>%
+  mutate(ASVs = rownames(tab_diff))
+
+taxids <- as.data.frame(ps_all.afterspike@tax_table) 
+
+taxids <- taxids %>% 
+  mutate(ASVs = rownames(taxids))
+
+diff_abund.taxids <- full_join(tab_diff, taxids, by = "ASVs")
+
+
+
+```
+
+
+
+
+

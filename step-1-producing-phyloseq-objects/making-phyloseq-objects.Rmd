@@ -135,7 +135,7 @@ Important files made in part one:
 Live samples: Create a path to the files being used
 ```{r fastq-file-path}
 
-all_live_path = file.path("~/landfill-microcosms/data/PEAR-merged-fastq-files/all_live")
+all_live_path = file.path("")
 all_filt_path <- file.path("~/Desktop/Landfill_Project/16s_data/all_live_filt_from_github_repository/")
 
 ```
